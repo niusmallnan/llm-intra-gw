@@ -81,10 +81,9 @@ function _M.resolve()
     end
 
     if strip_request_path then
-        return upstream_base_url
-    else
-        return upstream_base_url .. ngx.var.request_uri
+        ngx.req.set_uri("/")
     end
+    return upstream_base_url .. ngx.var.uri
 end
 
 -- Inject enterprise-required headers into the outgoing proxy request.

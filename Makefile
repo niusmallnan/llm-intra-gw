@@ -33,7 +33,7 @@ down:
 health:
 	curl -s http://localhost:$(PORT)/health | jq .
 
-# ---- Quick smoke test with a dummy upstream ----
+# ---- Integration tests (mock upstream + gateway + test cases) ----
 test:
 	@bash scripts/test.sh
 

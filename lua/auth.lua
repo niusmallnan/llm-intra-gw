@@ -4,6 +4,8 @@
 -- If the list is empty or unset, all traffic is allowed.
 -- Otherwise, the client IP must match at least one entry.
 
+local bit = require "bit"
+
 local _M = {}
 
 -- Convert an IPv4 address string to a 32-bit integer.
@@ -12,7 +14,10 @@ local function ip_to_int(ip)
     if not a then
         return nil
     end
-    return ((tonumber(a) * 256 + tonumber(b)) * 256 + tonumber(c)) * 256 + tonumber(d)
+    return bit.bor(bit.lshift(tonumber(a), 24),
+                   bit.lshift(tonumber(b), 16),
+                   bit.lshift(tonumber(c), 8),
+                   tonumber(d))
 end
 
 -- Parse a CIDR string like "192.168.1.0/24" into (net_int, mask_int).
@@ -34,7 +39,7 @@ local function parse_cidr(cidr)
     if bits < 0 or bits > 32 then
         return nil
     end
-    local mask = bits == 0 and 0 or (0xFFFFFFFF << (32 - bits)) & 0xFFFFFFFF
+    local mask = bits == 0 and 0 or bit.band(bit.lshift(0xFFFFFFFF, 32 - bits), 0xFFFFFFFF)
     return ip_int, mask
 end
 
@@ -53,7 +58,7 @@ function _M.check(client_ip)
 
     for entry in whitelist_str:gmatch("[^,%s]+") do
         local net_int, mask = parse_cidr(entry)
-        if net_int and (client_int & mask) == (net_int & mask) then
+        if net_int and bit.band(client_int, mask) == bit.band(net_int, mask) then
             return true
         end
     end

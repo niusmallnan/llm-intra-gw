@@ -180,12 +180,17 @@ spec:
 ## Testing Locally
 
 ```bash
-# Run a health check
-make health
-
-# Run quick smoke tests (requires the gateway to be running)
+# Run the full integration test suite (mock upstream + gateway + test cases)
 make test
+
+# Run just a health check against a running instance
+make health
 ```
+
+`make test` is self-contained — it starts a mock internal LLM API, launches the
+gateway via docker compose pointed at the mock, runs all tests (health, models,
+chat completions header injection, Content-Type validation, auth stripping), and
+cleans up afterwards.
 
 ## Development
 
