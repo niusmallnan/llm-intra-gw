@@ -17,6 +17,7 @@ services:
       EXTRA_HEADERS: ${EXTRA_HEADERS:-}
       RESOLVER: ${RESOLVER:-}
       GATEWAY_PORT: ${GATEWAY_PORT:-8080}
+      ENABLE_STREAMING: ${ENABLE_STREAMING:-false}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]

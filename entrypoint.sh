@@ -14,6 +14,23 @@ if [ -n "$RESOLVER" ]; then
 fi
 
 # ------------------------------------------------------------------
+# Streaming support (optional, default: disabled)
+# ------------------------------------------------------------------
+if [ "${ENABLE_STREAMING:-}" = "true" ]; then
+    echo ">> Streaming support enabled"
+    sed -i "s/# @proxy_read_timeout@/proxy_read_timeout 3600s;/" \
+        /usr/local/openresty/nginx/conf/nginx.conf
+    sed -i "s/# @streaming_settings@/gzip off;/" \
+        /usr/local/openresty/nginx/conf/nginx.conf
+else
+    echo ">> Streaming support disabled (use ENABLE_STREAMING=true to enable)"
+    sed -i "s/# @proxy_read_timeout@/proxy_read_timeout 60s;/" \
+        /usr/local/openresty/nginx/conf/nginx.conf
+    sed -i "/# @streaming_settings@/d" \
+        /usr/local/openresty/nginx/conf/nginx.conf
+fi
+
+# ------------------------------------------------------------------
 # Validate required environment variables
 # ------------------------------------------------------------------
 fail() {

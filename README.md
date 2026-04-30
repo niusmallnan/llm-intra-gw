@@ -67,18 +67,20 @@ the image or the source code.**
 | `EXTRA_HEADERS` | ❌ | `{}` | Additional headers to inject, as a JSON object (e.g. `{"X-Department":"ai","X-Tenant":"default"}`). |
 | `RESOLVER` | ❌ | `127.0.0.11` | DNS resolver IP. Override if not running inside Docker. |
 | `GATEWAY_PORT` | ❌ | `8080` | Port the gateway listens on inside the container. |
+| `ENABLE_STREAMING` | ❌ | `false` | Enable SSE streaming support (`stream: true`). When enabled, `proxy_read_timeout` is set to 3600s and `gzip` is disabled. |
 
 ## Endpoints
 
 | Path | Method | Description |
 |---|---|---|
 | `/health` | `GET` | Health check. Returns `{"status":"ok"}`. |
-| `/v1/chat/completions` | `POST` | Chat completions (non-streaming). |
+| `/v1/chat/completions` | `POST` | Chat completions (non-streaming by default; streaming requires `ENABLE_STREAMING=true`). |
 | `/v1/models` | `GET` | List available models. |
 | `/v1/*` | `*` | All other OpenAI-compatible endpoints are proxied transparently. |
 
-> **Note:** Streaming (`stream: true`) is not yet supported.  It is on the
-> roadmap for a future release.
+> **Streaming support:** Set `ENABLE_STREAMING=true` to proxy SSE stream responses
+> (`stream: true`).  When disabled (default), the gateway is tuned for standard
+> request/response performance.
 
 ## How It Works
 
@@ -110,6 +112,7 @@ APIKEY=your-shared-api-key
 PERSONAL_ACCESS_CODE=your-personal-token
 IP_WHITELIST=10.0.0.0/8
 EXTRA_HEADERS={"X-Department":"ai-platform"}
+# ENABLE_STREAMING=true  # optional, enable to support `stream: true`
 ```
 
 Then run:
