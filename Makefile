@@ -34,7 +34,7 @@ health:
 	curl -s http://localhost:$(PORT)/health | jq .
 
 # ---- Integration tests (mock upstream + gateway + test cases) ----
-test:
+test: build
 	@bash scripts/test.sh
 
 # ---- Logs ----
