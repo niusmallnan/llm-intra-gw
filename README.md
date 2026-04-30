@@ -69,6 +69,7 @@ the image or the source code.**
 | `GATEWAY_PORT` | ❌ | `8080` | Port the gateway listens on inside the container. |
 | `ENABLE_STREAMING` | ❌ | `false` | Enable SSE streaming support (`stream: true`). When enabled, `proxy_read_timeout` is set to 3600s and `gzip` is disabled. |
 | `STRIP_REQUEST_PATH` | ❌ | `true` | When `true` (default), proxy requests directly to `UPSTREAM_BASE_URL`. When `false`, append the original request URI (e.g. `/v1/chat/completions`). |
+| `TRACE` | ❌ | *(off)* | Enable request/response tracing to the error log for debugging. Set to `1`, `true`, `on`, or `yes` to log: client request (headers + body), gateway-modified upstream request (injected headers + target URL), and upstream response (status + headers + full body). |
 
 ## Endpoints
 
@@ -101,9 +102,17 @@ the image or the source code.**
 3. **Proxy** — The request is forwarded to `UPSTREAM_BASE_URL` with the
    original path and request body preserved.  Since the internal API already
    speaks the OpenAI protocol, no body transformation is needed.
+   TLS certificate verification is disabled (`proxy_ssl_verify off`) for
+   HTTPS upstreams — the gateway trusts the internal network.
 
 4. **Response** — The upstream response is returned to the client as-is
    (proxied transparently).
+
+5. **Trace (debugging)** — When `TRACE` is enabled, the gateway logs three
+   stages to the nginx error log:
+   - Original client request (headers + body)
+   - Gateway-modified upstream request (injected headers + target URL)
+   - Upstream response (status + all headers + full body)
 
 ## Deploying
 
@@ -118,6 +127,7 @@ PERSONAL_ACCESS_CODE=your-personal-token
 IP_WHITELIST=10.0.0.0/8
 EXTRA_HEADERS={"X-Department":"ai-platform"}
 # ENABLE_STREAMING=true  # optional, enable to support `stream: true`
+# TRACE=1                # optional, log request/response details for debugging
 ```
 
 Then run:
