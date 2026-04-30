@@ -52,10 +52,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         })
 
     def do_GET(self):
-        if self.path == "/health":
-            self._send_json(200, {"status": "ok"})
-        else:
-            self._echo()
+        self._echo()
 
     def do_POST(self):
         # Reject non-JSON requests (mirrors the gateway's own validation for
