@@ -1,0 +1,125 @@
+-- upstream.lua — upstream resolver and header injection module
+--
+-- Reads UPSTREAM_BASE_URL, APIKEY, PERSONAL_ACCESS_CODE, and EXTRA_HEADERS
+-- from the environment at init time.
+--
+-- Injects two enterprise-required headers into every proxied request:
+--   1. apikey         — shared key obtained from the internal API Platform
+--   2. Authorization  — composed as "ACCESSCODE <PERSONAL_ACCESS_CODE>" where
+--                       "ACCESSCODE" is a fixed prefix and PERSONAL_ACCESS_CODE
+--                       is a personal token obtained from the LLM platform.
+--
+-- Provides:
+--   resolve()        — build the full upstream URL for the current request
+--   inject_headers() — attach enterprise-required headers to the proxied request
+
+local cjson = require "cjson"
+
+local _M = {}
+
+-- ---------------------------------------------------------------------------
+-- Configuration (loaded once at module load time)
+-- ---------------------------------------------------------------------------
+
+local upstream_base_url = os.getenv("UPSTREAM_BASE_URL")
+
+local apikey              = os.getenv("APIKEY")
+local personal_access_code = os.getenv("PERSONAL_ACCESS_CODE")
+
+-- Optional additional headers
+local extra_headers_raw = os.getenv("EXTRA_HEADERS")
+
+-- Parse EXTRA_HEADERS JSON once
+local extra_headers = {}
+if extra_headers_raw and extra_headers_raw ~= "" then
+    local ok, decoded = pcall(cjson.decode, extra_headers_raw)
+    if ok and type(decoded) == "table" then
+        extra_headers = decoded
+    else
+        ngx.log(ngx.WARN, "failed to parse EXTRA_HEADERS JSON: ", extra_headers_raw)
+    end
+end
+
+-- Remove trailing slash from base URL for consistent concatenation
+if upstream_base_url then
+    upstream_base_url = upstream_base_url:gsub("/+$", "")
+end
+
+-- ---------------------------------------------------------------------------
+-- Public API
+-- ---------------------------------------------------------------------------
+
+-- Extract the host:port portion from UPSTREAM_BASE_URL.
+-- Used to set the Host header for the proxied request.
+function _M.get_upstream_host()
+    if not upstream_base_url then
+        return nil
+    end
+    -- Strip scheme (https:// or http://) and path
+    local host = upstream_base_url:match("^https?://([^/]+)")
+    return host
+end
+
+-- Build the full upstream target URL for the current request.
+-- Returns nil and sets ngx.status on error.
+function _M.resolve()
+    if not upstream_base_url then
+        ngx.status = 500
+        ngx.header["Content-Type"] = "application/json"
+        ngx.say(cjson.encode({
+            error = {
+                message = "UPSTREAM_BASE_URL is not configured",
+                type = "server_error"
+            }
+        }))
+        ngx.exit(500)
+        return nil
+    end
+
+    -- Use the original request URI as-is, since the internal API speaks
+    -- the same OpenAI protocol.
+    return upstream_base_url .. ngx.var.request_uri
+end
+
+-- Inject enterprise-required headers into the outgoing proxy request.
+function _M.inject_headers()
+    -- 1. Strip the agent's own Authorization header (e.g. OpenAI API key)
+    --    to prevent it from leaking to the internal API.
+    ngx.req.clear_header("Authorization")
+
+    -- 2. Inject the shared API key (header: apikey).
+    if apikey and apikey ~= "" then
+        ngx.req.set_header("apikey", apikey)
+    end
+
+    -- 3. Compose and inject the enterprise Authorization header.
+    --    Format: "ACCESSCODE <PERSONAL_ACCESS_CODE>"
+    if personal_access_code and personal_access_code ~= "" then
+        ngx.req.set_header("Authorization", "ACCESSCODE " .. personal_access_code)
+    end
+
+    -- 4. Apply any additional user-configured headers.
+    --    apikey and Authorization are skipped here — they are handled above.
+    for k, v in pairs(extra_headers) do
+        local key_lower = k:lower()
+        if key_lower ~= "apikey" and key_lower ~= "authorization" then
+            ngx.req.set_header(k, tostring(v))
+        end
+    end
+end
+
+-- Validate that required configuration is present.
+function _M.validate()
+    if not upstream_base_url then
+        return false, "UPSTREAM_BASE_URL is required but not set"
+    end
+    if not apikey or apikey == "" then
+        return false, "APIKEY is required but not set"
+    end
+    if not personal_access_code or personal_access_code == "" then
+        return false, "PERSONAL_ACCESS_CODE is required but not set"
+    end
+    return true, nil
+end
+
+return _M
