@@ -68,6 +68,7 @@ the image or the source code.**
 | `RESOLVER` | ❌ | `127.0.0.11` | DNS resolver IP. Override if not running inside Docker. |
 | `GATEWAY_PORT` | ❌ | `8080` | Port the gateway listens on inside the container. |
 | `ENABLE_STREAMING` | ❌ | `false` | Enable SSE streaming support (`stream: true`). When enabled, `proxy_read_timeout` is set to 3600s and `gzip` is disabled. |
+| `STRIP_REQUEST_PATH` | ❌ | `true` | When `true` (default), proxy requests directly to `UPSTREAM_BASE_URL`. When `false`, append the original request URI (e.g. `/v1/chat/completions`). |
 
 ## Endpoints
 

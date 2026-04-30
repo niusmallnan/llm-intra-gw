@@ -26,6 +26,10 @@ local upstream_base_url = os.getenv("UPSTREAM_BASE_URL")
 local apikey              = os.getenv("APIKEY")
 local personal_access_code = os.getenv("PERSONAL_ACCESS_CODE")
 
+-- When true (default), proxy to UPSTREAM_BASE_URL directly.
+-- When false, append the original request URI.
+local strip_request_path   = os.getenv("STRIP_REQUEST_PATH") ~= "false"
+
 -- Optional additional headers
 local extra_headers_raw = os.getenv("EXTRA_HEADERS")
 
@@ -76,9 +80,11 @@ function _M.resolve()
         return nil
     end
 
-    -- Use the original request URI as-is, since the internal API speaks
-    -- the same OpenAI protocol.
-    return upstream_base_url .. ngx.var.request_uri
+    if strip_request_path then
+        return upstream_base_url
+    else
+        return upstream_base_url .. ngx.var.request_uri
+    end
 end
 
 -- Inject enterprise-required headers into the outgoing proxy request.
