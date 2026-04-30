@@ -35,13 +35,7 @@ health:
 
 # ---- Quick smoke test with a dummy upstream ----
 test:
-	@echo ">>> Health check ..."
-	@curl -sf http://localhost:$(PORT)/health || (echo "FAIL: health check" && exit 1)
-	@echo "OK"
-	@echo ">>> Unknown path should return 404 ..."
-	@test "$$(curl -s -o /dev/null -w '%{http_code}' http://localhost:$(PORT)/unknown)" = "404" \
-		|| (echo "FAIL: expected 404" && exit 1)
-	@echo "OK"
+	@bash scripts/test.sh
 
 # ---- Logs ----
 logs:

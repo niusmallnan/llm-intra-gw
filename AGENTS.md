@@ -6,13 +6,18 @@ OpenResty (nginx + LuaJIT) API gateway that proxies OpenAI-compatible requests t
 
 ```
 request → nginx.conf /v1/ location
-           → access_by_lua_block: lua/auth.lua (IP whitelist)
+           → access_by_lua_block: lua/auth.lua (IP whitelist), lua/upstream.lua (Content-Type validation)
            → rewrite_by_lua_block: lua/upstream.lua (resolve upstream, inject headers)
            → proxy_pass (chunked, unbuffered)
+
+request → nginx.conf /v1/models location
+           → access_by_lua_block: lua/auth.lua (IP whitelist)
+           → content_by_lua_block: lua/models.lua (return curated model list)
 ```
 
 - `lua/auth.lua` — IP whitelist check via `IP_WHITELIST` env var (comma-separated IPs/CIDRs). Empty = allow all.
-- `lua/upstream.lua` — builds upstream URL from `UPSTREAM_BASE_URL` + request URI, injects `apikey` and `Authorization: ACCESSCODE <PERSONAL_ACCESS_CODE>` headers, strips the client's original `Authorization`.
+- `lua/upstream.lua` — Content-Type validation (only `application/json` accepted), builds upstream URL from `UPSTREAM_BASE_URL` + request URI, injects `apikey` and `Authorization: ACCESSCODE <PERSONAL_ACCESS_CODE>` headers, strips the client's original `Authorization`.
+- `lua/models.lua` — returns a curated subset of models (`DeepSeek-v4-Pro`, `GLM-5.1`). Edit the `MODELS` table to add/remove entries.
 - `conf/nginx.conf` — declares all env vars via `env` directive (required for `os.getenv()` in Lua) and defines `lua_package_path`.
 
 ## Commands
@@ -27,7 +32,7 @@ make test           # smoke test against a running gateway (health + 404)
 make clean          # docker compose down + image rm
 ```
 
-`make test` expects the gateway already running (it doesn't start anything — it just curls).
+`make test` expects the gateway already running (it doesn't start anything — it runs `scripts/test.sh`).
 
 ## Gotchas
 

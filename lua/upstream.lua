@@ -108,6 +108,29 @@ function _M.inject_headers()
     end
 end
 
+-- Reject requests with non-JSON Content-Type.
+-- Requests without a Content-Type header (e.g. GET) are allowed through.
+function _M.validate_content_type()
+    local ct = ngx.var.http_content_type
+    if not ct or ct == "" then
+        return true
+    end
+    local ct_lower = ct:lower()
+    if ct_lower:find("application/json", 1, true) == 1 then
+        return true
+    end
+    ngx.status = 415
+    ngx.header["Content-Type"] = "application/json"
+    ngx.say(cjson.encode({
+        error = {
+            message = "unsupported content-type: " .. ct .. ". only application/json is accepted",
+            type = "invalid_request_error"
+        }
+    }))
+    ngx.exit(415)
+    return false
+end
+
 -- Validate that required configuration is present.
 function _M.validate()
     if not upstream_base_url then

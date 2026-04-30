@@ -75,7 +75,7 @@ the image or the source code.**
 |---|---|---|
 | `/health` | `GET` | Health check. Returns `{"status":"ok"}`. |
 | `/v1/chat/completions` | `POST` | Chat completions (non-streaming by default; streaming requires `ENABLE_STREAMING=true`). |
-| `/v1/models` | `GET` | List available models. |
+| `/v1/models` | `GET` | Curated model list (`DeepSeek-v4-Pro`, `GLM-5.1`). |
 | `/v1/*` | `*` | All other OpenAI-compatible endpoints are proxied transparently. |
 
 > **Streaming support:** Set `ENABLE_STREAMING=true` to proxy SSE stream responses
@@ -84,8 +84,12 @@ the image or the source code.**
 
 ## How It Works
 
-1. **Access phase** — If `IP_WHITELIST` is configured, the client IP is
-   checked against the list. Non-matching requests receive a `403`.
+1. **Access phase** — Two checks are performed:
+   - If `IP_WHITELIST` is configured, the client IP is checked against the
+     list. Non-matching requests receive a `403`.
+   - If a `Content-Type` header is present, it must be `application/json`
+     (`application/json; charset=utf-8` is accepted). Anything else receives
+     a `415`.
 
 2. **Rewrite phase** — Three things happen:
    - The agent's `Authorization` header is stripped.
