@@ -1,8 +1,10 @@
--- auth.lua — IP whitelist access control module
+-- auth.lua — IP whitelist and client key access control module
 --
--- Reads IP_WHITELIST from the environment (comma-separated IPs or CIDR ranges).
--- If the list is empty or unset, all traffic is allowed.
--- Otherwise, the client IP must match at least one entry.
+-- Reads IP_WHITELIST and FAKE_OPENAI_KEY from the environment.
+-- If IP_WHITELIST is empty or unset, all IPs are allowed.
+-- If FAKE_OPENAI_KEY is empty or unset, no client key check is performed.
+-- When FAKE_OPENAI_KEY is set, the client must present a matching
+-- Authorization: Bearer <FAKE_OPENAI_KEY> header.
 
 local bit = require "bit"
 
@@ -61,6 +63,26 @@ function _M.check(client_ip)
         if net_int and bit.band(client_int, mask) == bit.band(net_int, mask) then
             return true
         end
+    end
+
+    return false
+end
+
+-- Check whether the client presents a valid FAKE_OPENAI_KEY.
+-- Returns true if no key is configured, or if the client's Authorization
+-- header matches "Bearer <FAKE_OPENAI_KEY>".
+function _M.check_client_key()
+    local fake_openai_key = os.getenv("FAKE_OPENAI_KEY")
+    if not fake_openai_key or fake_openai_key == "" then
+        return true  -- no key configured, allow all
+    end
+
+    local headers = ngx.req.get_headers()
+    local auth_header = headers["Authorization"] or headers["authorization"]
+    local expected = "Bearer " .. fake_openai_key
+
+    if auth_header == expected then
+        return true
     end
 
     return false

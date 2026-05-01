@@ -25,16 +25,18 @@ Agent (OpenAI SDK) ─── /v1/chat/completions ───▶ Gateway ───
 
 ## How Authentication Works
 
-The gateway injects **two mandatory headers** into every proxied request:
+The gateway performs two layers of authentication:
+
+**Client → Gateway**: When `FAKE_OPENAI_KEY` is set, every client must include `Authorization: Bearer <FAKE_OPENAI_KEY>` in its request. This gives you a single API key to configure in all your agents and SDKs (set as the usual OpenAI API key).
+
+**Gateway → Internal API**: After validating the client key, the gateway strips it and injects the proprietary headers your internal API expects:
 
 | Header | Source | Description |
 |---|---|---|
-| `apikey` | `APIKEY` env var | A shared key obtained from your internal **API Platform**. |
+| `apikey` | `UPSTREAM_API_KEY` env var | A shared key obtained from your internal **API Platform**. |
 | `Authorization` | Fixed prefix `ACCESSCODE` + `PERSONAL_ACCESS_CODE` | Composed as `ACCESSCODE <PERSONAL_ACCESS_CODE>`. `ACCESSCODE` is a fixed prefix; `PERSONAL_ACCESS_CODE` is a personal token from your **LLM platform**. |
 
-The agent's original `Authorization` header (e.g., an OpenAI API key) is
-**stripped** before the request leaves the gateway — it never reaches your
-internal API.
+The client's original `Authorization` header is **stripped** before the request leaves the gateway — it never reaches your internal API.
 
 ## Quick Start
 
@@ -45,8 +47,9 @@ docker build -t llm-intra-gw .
 # 2. Run with your credentials
 docker run --rm -p 8080:8080 \
   -e UPSTREAM_BASE_URL=https://llm-api.internal.example.com \
-  -e APIKEY="your-shared-api-key" \
+  -e UPSTREAM_API_KEY="your-shared-api-key" \
   -e PERSONAL_ACCESS_CODE="your-personal-token" \
+  -e FAKE_OPENAI_KEY="sk-your-fake-openai-key" \
   llm-intra-gw
 ```
 
@@ -61,9 +64,10 @@ the image or the source code.**
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `UPSTREAM_BASE_URL` | ✅ | — | Base URL of the internal LLM API (e.g. `https://llm-api.example.com`). |
-| `APIKEY` | ✅ | — | Shared API key from your internal API Platform. Injected as the `apikey` header. |
+| `UPSTREAM_API_KEY` | ✅ | — | Shared API key from your internal API Platform. Injected as the `apikey` header. |
 | `PERSONAL_ACCESS_CODE` | ✅ | — | Personal token from your internal LLM platform. Composed as `Authorization: ACCESSCODE <PERSONAL_ACCESS_CODE>` (the `ACCESSCODE` prefix is hard-coded). |
 | `IP_WHITELIST` | ❌ | *(allow all)* | Comma-separated list of IPs or CIDR ranges allowed to access the gateway (e.g. `10.0.0.0/8,172.16.1.5`). |
+| `FAKE_OPENAI_KEY` | ❌ | *(no client auth)* | An API key that clients must present as `Authorization: Bearer <key>`. When set, requests without a matching key receive a `401`. When unset, no client-side authentication is required. |
 | `EXTRA_HEADERS` | ❌ | `{}` | Additional headers to inject, as a JSON object (e.g. `{"X-Department":"ai","X-Tenant":"default"}`). |
 | `RESOLVER` | ❌ | `127.0.0.11` | DNS resolver IP. Override if not running inside Docker. |
 | `GATEWAY_PORT` | ❌ | `8080` | Port the gateway listens on inside the container. |
@@ -86,7 +90,9 @@ the image or the source code.**
 
 ## How It Works
 
-1. **Access phase** — Two checks are performed:
+1. **Access phase** — Three checks are performed:
+   - If `FAKE_OPENAI_KEY` is configured, the client's `Authorization: Bearer <key>`
+     header is validated. Mismatched or missing keys receive a `401`.
    - If `IP_WHITELIST` is configured, the client IP is checked against the
      list. Non-matching requests receive a `403`.
    - If a `Content-Type` header is present, it must be `application/json`
@@ -122,8 +128,9 @@ Create a `.env` file:
 
 ```bash
 UPSTREAM_BASE_URL=https://llm-api.internal.example.com
-APIKEY=your-shared-api-key
+UPSTREAM_API_KEY=your-shared-api-key
 PERSONAL_ACCESS_CODE=your-personal-token
+FAKE_OPENAI_KEY=sk-your-fake-openai-key
 IP_WHITELIST=10.0.0.0/8
 EXTRA_HEADERS={"X-Department":"ai-platform"}
 # ENABLE_STREAMING=true  # optional, enable to support `stream: true`
@@ -144,7 +151,7 @@ kind: Secret
 metadata:
   name: gateway-secrets
 stringData:
-  APIKEY: "your-shared-api-key"
+  UPSTREAM_API_KEY: "your-shared-api-key"
   PERSONAL_ACCESS_CODE: "your-personal-token"
 ---
 apiVersion: apps/v1
@@ -169,11 +176,11 @@ spec:
         env:
         - name: UPSTREAM_BASE_URL
           value: "https://llm-api.internal.example.com"
-        - name: APIKEY
+        - name: UPSTREAM_API_KEY
           valueFrom:
             secretKeyRef:
               name: gateway-secrets
-              key: APIKEY
+              key: UPSTREAM_API_KEY
         - name: PERSONAL_ACCESS_CODE
           valueFrom:
             secretKeyRef:

@@ -15,11 +15,12 @@ run: build
 	docker run --rm -it \
 		-p $(PORT):8080 \
 		-e UPSTREAM_BASE_URL="$${UPSTREAM_BASE_URL}" \
-		-e APIKEY="$${APIKEY}" \
+		-e UPSTREAM_API_KEY="$${UPSTREAM_API_KEY}" \
 		-e PERSONAL_ACCESS_CODE="$${PERSONAL_ACCESS_CODE}" \
 		-e IP_WHITELIST="$${IP_WHITELIST:-}" \
 		-e EXTRA_HEADERS="$${EXTRA_HEADERS:-}" \
 		-e RESOLVER="$${RESOLVER:-}" \
+		-e FAKE_OPENAI_KEY="$${FAKE_OPENAI_KEY:-}" \
 		$(IMAGE):$(TAG)
 
 # ---- Docker Compose ----

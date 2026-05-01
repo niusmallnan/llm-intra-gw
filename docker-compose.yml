@@ -11,7 +11,7 @@ services:
       - "${GATEWAY_PORT:-8080}:8080"
     environment:
       UPSTREAM_BASE_URL: ${UPSTREAM_BASE_URL:-https://api.openai.com}
-      APIKEY: ${APIKEY:-}
+      UPSTREAM_API_KEY: ${UPSTREAM_API_KEY:-}
       PERSONAL_ACCESS_CODE: ${PERSONAL_ACCESS_CODE:-}
       IP_WHITELIST: ${IP_WHITELIST:-}
       EXTRA_HEADERS: ${EXTRA_HEADERS:-}
@@ -19,6 +19,7 @@ services:
       GATEWAY_PORT: ${GATEWAY_PORT:-8080}
       ENABLE_STREAMING: ${ENABLE_STREAMING:-false}
       STRIP_REQUEST_PATH: ${STRIP_REQUEST_PATH:-true}
+      FAKE_OPENAI_KEY: ${FAKE_OPENAI_KEY:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]

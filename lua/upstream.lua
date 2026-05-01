@@ -1,10 +1,10 @@
 -- upstream.lua — upstream resolver and header injection module
 --
--- Reads UPSTREAM_BASE_URL, APIKEY, PERSONAL_ACCESS_CODE, and EXTRA_HEADERS
+-- Reads UPSTREAM_BASE_URL, UPSTREAM_API_KEY, PERSONAL_ACCESS_CODE, and EXTRA_HEADERS
 -- from the environment at init time.
 --
 -- Injects two enterprise-required headers into every proxied request:
---   1. apikey         — shared key obtained from the internal API Platform
+--   1. apikey         — upstream key from the internal API Platform
 --   2. Authorization  — composed as "ACCESSCODE <PERSONAL_ACCESS_CODE>" where
 --                       "ACCESSCODE" is a fixed prefix and PERSONAL_ACCESS_CODE
 --                       is a personal token obtained from the LLM platform.
@@ -23,7 +23,7 @@ local _M = {}
 
 local upstream_base_url = os.getenv("UPSTREAM_BASE_URL")
 
-local apikey              = os.getenv("APIKEY")
+local upstream_api_key   = os.getenv("UPSTREAM_API_KEY")
 local personal_access_code = os.getenv("PERSONAL_ACCESS_CODE")
 
 -- When true (default), proxy to UPSTREAM_BASE_URL directly.
@@ -92,9 +92,9 @@ function _M.inject_headers()
     --    to prevent it from leaking to the internal API.
     ngx.req.clear_header("Authorization")
 
-    -- 2. Inject the shared API key (header: apikey).
-    if apikey and apikey ~= "" then
-        ngx.req.set_header("apikey", apikey)
+    -- 2. Inject the upstream API key (header: apikey).
+    if upstream_api_key and upstream_api_key ~= "" then
+        ngx.req.set_header("apikey", upstream_api_key)
     end
 
     -- 3. Compose and inject the enterprise Authorization header.
@@ -141,8 +141,8 @@ function _M.validate()
     if not upstream_base_url then
         return false, "UPSTREAM_BASE_URL is required but not set"
     end
-    if not apikey or apikey == "" then
-        return false, "APIKEY is required but not set"
+    if not upstream_api_key or upstream_api_key == "" then
+        return false, "UPSTREAM_API_KEY is required but not set"
     end
     if not personal_access_code or personal_access_code == "" then
         return false, "PERSONAL_ACCESS_CODE is required but not set"

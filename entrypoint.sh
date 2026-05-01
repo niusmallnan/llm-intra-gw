@@ -39,11 +39,11 @@ fail() {
 }
 
 [ -n "$UPSTREAM_BASE_URL" ]     || fail "UPSTREAM_BASE_URL is required"
-[ -n "$APIKEY" ]                || fail "APIKEY is required (get it from your internal API Platform)"
+[ -n "$UPSTREAM_API_KEY" ]  || fail "UPSTREAM_API_KEY is required (get it from your internal API Platform)"
 [ -n "$PERSONAL_ACCESS_CODE" ]  || fail "PERSONAL_ACCESS_CODE is required (your personal token from the LLM platform)"
 
 echo ">> Configuration valid — upstream: $UPSTREAM_BASE_URL"
-echo ">> APIKEY: [set]"
+echo ">> UPSTREAM_API_KEY: [set]"
 echo ">> PERSONAL_ACCESS_CODE: [set]"
 
 # ------------------------------------------------------------------

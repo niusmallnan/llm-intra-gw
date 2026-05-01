@@ -82,16 +82,18 @@ MOCK_HOST="${MOCK_HOST:-host.docker.internal}"
 UPSTREAM="http://${MOCK_HOST}:${MOCK_PORT}"
 
 export UPSTREAM_BASE_URL="${UPSTREAM_BASE_URL:-${UPSTREAM}}"
-export APIKEY="${APIKEY:-test-api-key}"
+export UPSTREAM_API_KEY="${UPSTREAM_API_KEY:-test-api-key}"
 export PERSONAL_ACCESS_CODE="${PERSONAL_ACCESS_CODE:-test-access-code}"
 export EXTRA_HEADERS="${EXTRA_HEADERS:-{\"X-Department\":\"ai-test\"}}"
 export STRIP_REQUEST_PATH="${STRIP_REQUEST_PATH:-true}"
+export FAKE_OPENAI_KEY="${FAKE_OPENAI_KEY:-test-client-key}"
 
 echo "  UPSTREAM_BASE_URL=${UPSTREAM_BASE_URL}"
-echo "  APIKEY=${APIKEY}"
+echo "  UPSTREAM_API_KEY=${UPSTREAM_API_KEY}"
 echo "  PERSONAL_ACCESS_CODE=${PERSONAL_ACCESS_CODE}"
 echo "  EXTRA_HEADERS=${EXTRA_HEADERS}"
 echo "  STRIP_REQUEST_PATH=${STRIP_REQUEST_PATH}"
+echo "  FAKE_OPENAI_KEY=${FAKE_OPENAI_KEY}"
 
 docker compose --project-directory "$PROJECT_DIR" up -d --build --wait 2>&1 | sed 's/^/  /'
 

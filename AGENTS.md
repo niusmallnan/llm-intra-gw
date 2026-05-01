@@ -15,8 +15,8 @@ request → nginx.conf /v1/models location
            → content_by_lua_block: lua/models.lua (return curated model list)
 ```
 
-- `lua/auth.lua` — IP whitelist check via `IP_WHITELIST` env var (comma-separated IPs/CIDRs). Empty = allow all.
-- `lua/upstream.lua` — Content-Type validation (only `application/json` accepted), builds upstream URL from `UPSTREAM_BASE_URL` (strips request URI by default; set `STRIP_REQUEST_PATH=false` to append it), injects `apikey` and `Authorization: ACCESSCODE <PERSONAL_ACCESS_CODE>` headers, strips the client's original `Authorization`.
+- `lua/auth.lua` — IP whitelist check via `IP_WHITELIST` env var (comma-separated IPs/CIDRs). Empty = allow all. Client key validation via `FAKE_OPENAI_KEY` — when set, the client must present `Authorization: Bearer <FAKE_OPENAI_KEY>` or receive a `401`.
+- `lua/upstream.lua` — Content-Type validation (only `application/json` accepted), builds upstream URL from `UPSTREAM_BASE_URL` (strips request URI by default; set `STRIP_REQUEST_PATH=false` to append it), injects `apikey` (from `UPSTREAM_API_KEY`) and `Authorization: ACCESSCODE <PERSONAL_ACCESS_CODE>` headers, strips the client's original `Authorization`.
 - `lua/models.lua` — returns a curated subset of models (`DeepSeek-v4-Pro`, `GLM-5.1`). Edit the `MODELS` table to add/remove entries.
 - `lua/trace.lua` — request/response tracing for debugging. When `TRACE` env var is set (`1`/`true`/`on`/`yes`), logs to error log: client request (headers + body), modified upstream request (injected headers + target URL), and upstream response (status + headers + full body).
 - `conf/nginx.conf` — declares all env vars via `env` directive (required for `os.getenv()` in Lua) and defines `lua_package_path`.
@@ -48,6 +48,9 @@ Streaming (`stream: true`) is disabled by default. Set `ENABLE_STREAMING=true` t
 
 ### No test framework
 There are no unit tests, linters, or typecheckers for the Lua code. `make test` is just a curl smoke test against a running instance.
+
+### nginx phase ordering: rewrite before access
+`rewrite_by_lua_block` runs in the rewrite phase, which occurs **before** the access phase (`access_by_lua_block`). If you inject headers that overwrite the original `Authorization` header (e.g. `upstream.inject_headers()`), any client auth check in `access_by_lua_block` will see the **replaced** header, not the original. The FAKE_OPENAI_KEY check must therefore run in `rewrite_by_lua_block` **before** `inject_headers()`.
 
 ### Makefile requires env vars in shell
 `make run` reads env vars from the shell (`$${VAR_NAME}` syntax). Set `UPSTREAM_BASE_URL`, `APIKEY`, and `PERSONAL_ACCESS_CODE` before running.
