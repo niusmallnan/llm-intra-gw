@@ -167,7 +167,7 @@ def run_tests(gateway_url):
     )
     check("POST with json+charset → 200", status == 200, f"got {status}")
 
-    # --- 15-17. in-house mode: body transformation ---
+    # --- 15-18. in-house mode: body transformation ---
     upstream_mode = os.environ.get("UPSTREAM_MODE", "")
     if upstream_mode == "inhouse":
         req_body = '{"model":"test","messages":[{"role":"user","content":"hi"}],"max_tokens":100,"top_p":0.9}'
@@ -186,6 +186,9 @@ def run_tests(gateway_url):
             check("inhouse → model unchanged",
                   '"model":' in echo_body,
                   "model missing")
+            check("inhouse → mode_code equals model",
+                  '"mode_code":' in echo_body,
+                  "mode_code not found")
         else:
             check("inhouse → 200", False, f"got {status}")
 
