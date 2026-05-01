@@ -57,8 +57,8 @@ function _M.log_original_request()
     end
 end
 
--- Log the gateway-modified request headers (after injection, before proxy_pass).
--- Must be called *after* inject_headers().
+-- Log the gateway-modified request headers and body (after injection, before proxy_pass).
+-- Must be called *after* inject_headers() and *after* transform_body() (if applicable).
 function _M.log_modified_request()
     if not _M.enabled() then return end
 
@@ -68,6 +68,14 @@ function _M.log_modified_request()
     local h = ngx.req.get_headers(100)
     for k, v in pairs(h) do
         ngx.log(ngx.WARN, "[TRACE] upstream-header ", k, ": ", v)
+    end
+
+    -- Log the current request body (may have been transformed by UPSTREAM_MODE=inhouse)
+    local body = read_body()
+    if body then
+        ngx.log(ngx.WARN, "[TRACE] request-body: ", body)
+    else
+        ngx.log(ngx.WARN, "[TRACE] request-body: (empty)")
     end
 end
 

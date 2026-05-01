@@ -74,6 +74,7 @@ the image or the source code.**
 | `ENABLE_STREAMING` | ❌ | `false` | Enable SSE streaming support (`stream: true`). When enabled, `proxy_read_timeout` is set to 3600s and `gzip` is disabled. |
 | `STRIP_REQUEST_PATH` | ❌ | `true` | When `true` (default), proxy requests directly to `UPSTREAM_BASE_URL`. When `false`, append the original request URI (e.g. `/v1/chat/completions`). |
 | `TRACE` | ❌ | *(off)* | Enable request/response tracing to the error log for debugging. Set to `1`, `true`, `on`, or `yes` to log: client request (headers + body), gateway-modified upstream request (injected headers + target URL), and upstream response (status + headers + full body). |
+| `UPSTREAM_MODE` | ❌ | `openai` | Upstream API mode. `openai` (default) proxies requests as-is. `inhouse` transforms the request body: renames `messages` to `contextMessage` and converts root-level keys from `snake_case` to `camelCase` (e.g. `max_tokens` → `maxTokens`). |
 
 ## Endpoints
 
@@ -97,10 +98,13 @@ the image or the source code.**
      (`application/json; charset=utf-8` is accepted). Anything else receives
      a `415`.
 
-2. **Rewrite phase** — Client authentication and header injection:
+2. **Rewrite phase** — Client authentication, body transformation, and header injection:
    - If `FAKE_OPENAI_KEY` is configured, the client's `Authorization: Bearer <key>`
      header is validated **first** (before any header modification). Mismatched or
      missing keys receive a `401`.
+   - If `UPSTREAM_MODE=inhouse`, the request body is transformed: root-level
+     `snake_case` keys are converted to `camelCase` (e.g. `max_tokens` →
+     `maxTokens`), and the `messages` field is renamed to `contextMessage`.
    - The client's original `Authorization` header is stripped.
    - `apikey` and `Authorization` (`ACCESSCODE <PERSONAL_ACCESS_CODE>`) headers are injected.
    - Any `EXTRA_HEADERS` are applied (except `apikey` and `Authorization`,
@@ -200,6 +204,9 @@ spec:
 ```bash
 # Run the full integration test suite (mock upstream + gateway + test cases)
 make test
+
+# Run tests with in-house API mode (UPSTREAM_MODE=inhouse, body transformation)
+make test-inhouse
 
 # Run just a health check against a running instance
 make health

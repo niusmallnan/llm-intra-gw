@@ -12,6 +12,7 @@
 -- Provides:
 --   resolve()        — build the full upstream URL for the current request
 --   inject_headers() — attach enterprise-required headers to the proxied request
+--   transform_body() — convert request body fields for in-house API (UPSTREAM_MODE=inhouse)
 
 local cjson = require "cjson"
 
@@ -134,6 +135,46 @@ function _M.validate_content_type()
     }))
     ngx.exit(415)
     return false
+end
+
+-- Transform the request body for the in-house API.
+-- Rules:
+--   1. Root-level key "messages" → "contextMessage"
+--   2. Root-level keys in snake_case → camelCase (e.g. "max_tokens" → "maxTokens")
+--   3. All non-matching keys and all values are kept as-is.
+-- Only applies when UPSTREAM_MODE is set to "inhouse".
+function _M.transform_body()
+    local mode = os.getenv("UPSTREAM_MODE")
+    if not mode or mode == "" then
+        return
+    end
+    if mode:lower() ~= "inhouse" then
+        return
+    end
+
+    ngx.req.read_body()
+    local body = ngx.req.get_body_data()
+    if not body or body == "" then
+        return
+    end
+
+    local ok, data = pcall(cjson.decode, body)
+    if not ok or type(data) ~= "table" then
+        return
+    end
+
+    local result = {}
+    for k, v in pairs(data) do
+        local new_key
+        if k == "messages" then
+            new_key = "contextMessage"
+        else
+            new_key = k:gsub("_(%l)", function(c) return c:upper() end)
+        end
+        result[new_key] = v
+    end
+
+    ngx.req.set_body_data(cjson.encode(result))
 end
 
 -- Validate that required configuration is present.

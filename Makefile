@@ -1,6 +1,6 @@
 # Makefile — LLM Intra Gateway
 
-.PHONY: build run stop test health logs clean send
+.PHONY: build run stop test test-inhouse health logs clean send
 
 IMAGE ?= llm-intra-gw
 TAG   ?= dev
@@ -21,6 +21,7 @@ run: build
 		-e EXTRA_HEADERS="$${EXTRA_HEADERS:-}" \
 		-e RESOLVER="$${RESOLVER:-}" \
 		-e FAKE_OPENAI_KEY="$${FAKE_OPENAI_KEY:-}" \
+		-e UPSTREAM_MODE="$${UPSTREAM_MODE:-}" \
 		$(IMAGE):$(TAG)
 
 # ---- Docker Compose ----
@@ -37,6 +38,10 @@ health:
 # ---- Integration tests (mock upstream + gateway + test cases) ----
 test: build
 	@bash scripts/test.sh
+
+# ---- Integration tests with in-house API mode (UPSTREAM_MODE=inhouse) ----
+test-inhouse: build
+	@UPSTREAM_MODE=inhouse bash scripts/test.sh
 
 # ---- Sample request for troubleshooting (gateway must be running, TRACE=1) ----
 send:

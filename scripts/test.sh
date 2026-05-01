@@ -87,6 +87,7 @@ export PERSONAL_ACCESS_CODE="${PERSONAL_ACCESS_CODE:-test-access-code}"
 export EXTRA_HEADERS="${EXTRA_HEADERS:-{\"X-Department\":\"ai-test\"}}"
 export STRIP_REQUEST_PATH="${STRIP_REQUEST_PATH:-true}"
 export FAKE_OPENAI_KEY="${FAKE_OPENAI_KEY:-test-client-key}"
+export UPSTREAM_MODE="${UPSTREAM_MODE:-}"
 
 echo "  UPSTREAM_BASE_URL=${UPSTREAM_BASE_URL}"
 echo "  UPSTREAM_API_KEY=${UPSTREAM_API_KEY}"
@@ -94,6 +95,7 @@ echo "  PERSONAL_ACCESS_CODE=${PERSONAL_ACCESS_CODE}"
 echo "  EXTRA_HEADERS=${EXTRA_HEADERS}"
 echo "  STRIP_REQUEST_PATH=${STRIP_REQUEST_PATH}"
 echo "  FAKE_OPENAI_KEY=${FAKE_OPENAI_KEY}"
+echo "  UPSTREAM_MODE=${UPSTREAM_MODE:-openai}"
 
 docker compose --project-directory "$PROJECT_DIR" up -d --build --wait 2>&1 | sed 's/^/  /'
 

@@ -17,6 +17,7 @@ Usage:
 """
 
 import re
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -134,10 +135,19 @@ def run_tests(gateway_url):
               bool(re.search(r'"X-Department"\s*:\s*"ai-test"', echo_body)),
               "header not found")
 
-        # body preserved
-        check("chat/completions → body preserved",
-              '"messages":' in echo_body,
-              "body missing")
+        # body preserved (openai) / transformed (inhouse)
+        upstream_mode = os.environ.get("UPSTREAM_MODE", "")
+        if upstream_mode == "inhouse":
+            check("chat/completions → messages → contextMessage",
+                  '"contextMessage":' in echo_body,
+                  "contextMessage not found")
+            check("chat/completions → messages stripped",
+                  '"messages":' not in echo_body,
+                  "original messages key leaked")
+        else:
+            check("chat/completions → body preserved",
+                  '"messages":' in echo_body,
+                  "body missing")
     else:
         check("chat/completions → 200", False, f"got {status}")
 
@@ -156,6 +166,28 @@ def run_tests(gateway_url):
         headers={"Content-Type": "application/json; charset=utf-8", **AUTH_HEADER},
     )
     check("POST with json+charset → 200", status == 200, f"got {status}")
+
+    # --- 15-17. in-house mode: body transformation ---
+    upstream_mode = os.environ.get("UPSTREAM_MODE", "")
+    if upstream_mode == "inhouse":
+        req_body = '{"model":"test","messages":[{"role":"user","content":"hi"}],"max_tokens":100,"top_p":0.9}'
+        status, echo_body = http_post(
+            f"{gateway_url}/v1/chat/completions",
+            req_body,
+            headers={"Content-Type": "application/json", **AUTH_HEADER},
+        )
+        if status == 200:
+            check("inhouse → max_tokens → maxTokens",
+                  '"maxTokens":' in echo_body,
+                  "maxTokens not found")
+            check("inhouse → top_p → topP",
+                  '"topP":' in echo_body,
+                  "topP not found")
+            check("inhouse → model unchanged",
+                  '"model":' in echo_body,
+                  "model missing")
+        else:
+            check("inhouse → 200", False, f"got {status}")
 
 
 def main():
