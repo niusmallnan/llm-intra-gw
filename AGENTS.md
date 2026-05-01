@@ -33,7 +33,7 @@ make test           # smoke test against a running gateway (health + 404)
 make clean          # docker compose down + image rm
 ```
 
-`make test` starts a mock upstream API, launches the gateway via docker-compose pointed at the mock, runs integration tests (health, models, chat completions header injection, Content-Type validation, auth stripping), then tears everything down. It is self-contained — no pre-running gateway needed. The test script lives at `scripts/test.py` and the mock upstream at `scripts/mock_api.py`.
+`make test` starts a mock upstream API, launches the gateway via docker-compose pointed at the mock, runs integration tests (health, models, chat completions header injection, Content-Type validation, auth stripping), then tears everything down. It is self-contained — no pre-running gateway needed. Orchestration (mock + gateway lifecycle) lives in `scripts/test.sh`; the test cases themselves are in `scripts/test_cases.py`, and the mock upstream at `scripts/mock_api.py`.
 
 ## Gotchas
 
