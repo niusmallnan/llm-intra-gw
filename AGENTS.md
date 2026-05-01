@@ -30,10 +30,13 @@ make up             # docker compose up -d
 make logs           # docker logs -f llm-intra-gw
 make health         # curl :8080/health
 make test           # smoke test against a running gateway (health + 404)
+make send           # send a sample request + display TRACE logs (gateway must be running with TRACE=1)
 make clean          # docker compose down + image rm
 ```
 
 `make test` starts a mock upstream API, launches the gateway via docker-compose pointed at the mock, runs integration tests (health, models, chat completions header injection, Content-Type validation, auth stripping), then tears everything down. It is self-contained — no pre-running gateway needed. Orchestration (mock + gateway lifecycle) lives in `scripts/test.sh`; the test cases themselves are in `scripts/test_cases.py`, and the mock upstream at `scripts/mock_api.py`.
+
+`make send` sends a sample chat completions request to a running gateway and displays: the client request, the client response, and the gateway's TRACE logs (what it received from the client, what it sent upstream, and what the upstream returned). The gateway must be running with `TRACE=1`. The script is at `scripts/send_request.sh`.
 
 ## Gotchas
 

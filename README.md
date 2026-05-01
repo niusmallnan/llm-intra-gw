@@ -90,17 +90,18 @@ the image or the source code.**
 
 ## How It Works
 
-1. **Access phase** — Three checks are performed:
-   - If `FAKE_OPENAI_KEY` is configured, the client's `Authorization: Bearer <key>`
-     header is validated. Mismatched or missing keys receive a `401`.
+1. **Access phase** — IP whitelist and content-type validation:
    - If `IP_WHITELIST` is configured, the client IP is checked against the
      list. Non-matching requests receive a `403`.
    - If a `Content-Type` header is present, it must be `application/json`
      (`application/json; charset=utf-8` is accepted). Anything else receives
      a `415`.
 
-2. **Rewrite phase** — Three things happen:
-   - The agent's `Authorization` header is stripped.
+2. **Rewrite phase** — Client authentication and header injection:
+   - If `FAKE_OPENAI_KEY` is configured, the client's `Authorization: Bearer <key>`
+     header is validated **first** (before any header modification). Mismatched or
+     missing keys receive a `401`.
+   - The client's original `Authorization` header is stripped.
    - `apikey` and `Authorization` (`ACCESSCODE <PERSONAL_ACCESS_CODE>`) headers are injected.
    - Any `EXTRA_HEADERS` are applied (except `apikey` and `Authorization`,
      which are reserved).
@@ -220,6 +221,12 @@ make up
 
 # View logs
 make logs
+
+# Send a sample request and display TRACE debug output
+# (gateway must be running with TRACE=1)
+make send
+# optionally override env vars:
+#   GATEWAY_URL=https://my-gateway.example.com FAKE_OPENAI_KEY=sk-test make send
 
 # Stop and clean up
 make clean
