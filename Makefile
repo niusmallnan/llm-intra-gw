@@ -1,6 +1,6 @@
 # Makefile — LLM Intra Gateway
 
-.PHONY: build run stop test test-inhouse health logs clean send
+.PHONY: build run stop test test-inhouse health logs clean send send-toolcall
 
 IMAGE ?= llm-intra-gw
 TAG   ?= dev
@@ -50,6 +50,14 @@ send:
 	 MODEL_ID=$${MODEL_ID:-DeepSeek-V4-Pro} \
 	 CONTAINER_NAME=$${CONTAINER_NAME:-llm-intra-gw} \
 	 bash scripts/send_request.sh "$$GATEWAY_URL" "$$FAKE_OPENAI_KEY"
+
+# ---- Sample Tool Calls request ----
+send-toolcall:
+	@GATEWAY_URL=$${GATEWAY_URL:-http://localhost:8080} \
+	 FAKE_OPENAI_KEY=$${FAKE_OPENAI_KEY:-} \
+	 MODEL_ID=$${MODEL_ID:-DeepSeek-V4-Pro} \
+	 CONTAINER_NAME=$${CONTAINER_NAME:-llm-intra-gw} \
+	 bash scripts/send_toolcall.sh "$$GATEWAY_URL" "$$FAKE_OPENAI_KEY"
 
 # ---- Logs ----
 logs:
