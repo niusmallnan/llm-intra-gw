@@ -141,7 +141,8 @@ end
 -- Rules:
 --   1. Root-level key "messages" → "contextMessage"
 --   2. Root-level keys in snake_case → camelCase (e.g. "max_tokens" → "maxTokens")
---   3. Append "modeCode" with the value of the "model" field
+--   3. Append "modelCode" with the value of the "model" field
+--   4. Append "question" with a fixed space value (backend workaround)
 --   4. All non-matching keys and all values are kept as-is.
 -- Only applies when UPSTREAM_MODE is set to "inhouse".
 function _M.transform_body()
@@ -175,7 +176,8 @@ function _M.transform_body()
         result[new_key] = v
     end
 
-    result["modeCode"] = result["model"]
+    result["modelCode"] = result["model"]
+    result["question"] = " "
 
     ngx.req.set_body_data(cjson.encode(result))
 end

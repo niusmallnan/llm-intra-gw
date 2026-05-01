@@ -5,7 +5,7 @@ set -euo pipefail
 
 GATEWAY_URL="${1:-http://localhost:8080}"
 FAKE_OPENAI_KEY="${2:-}"
-MODEL_ID="${MODEL_ID:-DeepSeek-v4-Pro}"
+MODEL_ID="${MODEL_ID:-DeepSeek-V4-Pro}"
 CONTAINER="${CONTAINER_NAME:-llm-intra-gw}"
 
 GATEWAY_URL="${GATEWAY_URL%/}"

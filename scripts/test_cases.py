@@ -90,8 +90,8 @@ def run_tests(gateway_url):
     # --- 5-7. /v1/models with valid auth returns curated list ---
     status, body = http_get(f"{gateway_url}/v1/models", headers=AUTH_HEADER)
     if status == 200:
-        check("/v1/models → DeepSeek-v4-Pro",
-              '"id":"DeepSeek-v4-Pro"' in body,
+        check("/v1/models → DeepSeek-V4-Pro",
+              '"id":"DeepSeek-V4-Pro"' in body,
               "missing model id")
         check("/v1/models → GLM-5.1",
               '"id":"GLM-5.1"' in body,
@@ -103,7 +103,7 @@ def run_tests(gateway_url):
         check("/v1/models → 200", False, f"got {status}")
 
     # --- 8-12. chat completions — header injection ---
-    req_body = '{"model":"DeepSeek-v4-Pro","messages":[{"role":"user","content":"hello"}]}'
+    req_body = '{"model":"DeepSeek-V4-Pro","messages":[{"role":"user","content":"hello"}]}'
     status, echo_body = http_post(
         f"{gateway_url}/v1/chat/completions",
         req_body,
@@ -167,7 +167,7 @@ def run_tests(gateway_url):
     )
     check("POST with json+charset → 200", status == 200, f"got {status}")
 
-    # --- 15-18. in-house mode: body transformation ---
+    # --- 15-19. in-house mode: body transformation ---
     upstream_mode = os.environ.get("UPSTREAM_MODE", "")
     if upstream_mode == "inhouse":
         req_body = '{"model":"test","messages":[{"role":"user","content":"hi"}],"max_tokens":100,"top_p":0.9}'
@@ -186,9 +186,12 @@ def run_tests(gateway_url):
             check("inhouse → model unchanged",
                   '"model":' in echo_body,
                   "model missing")
-            check("inhouse → modeCode equals model",
-                  '"modeCode":' in echo_body,
-                  "modeCode not found")
+            check("inhouse → modelCode equals model",
+                  '"modelCode":' in echo_body,
+                  "modelCode not found")
+            check("inhouse → question fixed value",
+                  '"question":' in echo_body,
+                  "question not found")
         else:
             check("inhouse → 200", False, f"got {status}")
 

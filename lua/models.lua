@@ -10,7 +10,7 @@ local cjson = require "cjson"
 local _M = {}
 
 local MODELS = {
-    "DeepSeek-v4-Pro",
+    "DeepSeek-V4-Pro",
     "GLM-5.1",
 }
 

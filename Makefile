@@ -47,7 +47,7 @@ test-inhouse: build
 send:
 	@GATEWAY_URL=$${GATEWAY_URL:-http://localhost:8080} \
 	 FAKE_OPENAI_KEY=$${FAKE_OPENAI_KEY:-} \
-	 MODEL_ID=$${MODEL_ID:-DeepSeek-v4-Pro} \
+	 MODEL_ID=$${MODEL_ID:-DeepSeek-V4-Pro} \
 	 CONTAINER_NAME=$${CONTAINER_NAME:-llm-intra-gw} \
 	 bash scripts/send_request.sh "$$GATEWAY_URL" "$$FAKE_OPENAI_KEY"
 

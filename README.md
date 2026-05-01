@@ -82,7 +82,7 @@ the image or the source code.**
 |---|---|---|
 | `/health` | `GET` | Health check. Returns `{"status":"ok"}`. |
 | `/v1/chat/completions` | `POST` | Chat completions (non-streaming by default; streaming requires `ENABLE_STREAMING=true`). |
-| `/v1/models` | `GET` | Curated model list (`DeepSeek-v4-Pro`, `GLM-5.1`). |
+| `/v1/models` | `GET` | Curated model list (`DeepSeek-V4-Pro`, `GLM-5.1`). |
 | `/v1/*` | `*` | All other OpenAI-compatible endpoints are proxied transparently. |
 
 > **Streaming support:** Set `ENABLE_STREAMING=true` to proxy SSE stream responses
