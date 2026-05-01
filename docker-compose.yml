@@ -21,6 +21,7 @@ services:
       STRIP_REQUEST_PATH: ${STRIP_REQUEST_PATH:-true}
       FAKE_OPENAI_KEY: ${FAKE_OPENAI_KEY:-}
       UPSTREAM_MODE: ${UPSTREAM_MODE:-}
+      TRACE: ${TRACE:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]

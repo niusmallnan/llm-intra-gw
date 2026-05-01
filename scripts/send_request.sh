@@ -62,14 +62,15 @@ echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
 
 # ── TRACE ──────────────────────────────────────────────────────
 
-TRACE=$(docker logs "$CONTAINER" --tail 200 2>&1 \
+TRACE_RAW=$(docker logs "$CONTAINER" --tail 200 2>&1 \
   | grep '\[TRACE\]' \
-  | sed -E 's/^.*\[TRACE\]/[TRACE]/; s/, client:.*$//' \
   || true)
 
 section "GATEWAY TRACE LOGS (what the gateway saw/sent/received)"
-if [ -n "$TRACE" ]; then
-  echo "$TRACE"
-else
+
+if [ -z "$TRACE_RAW" ]; then
   echo "(no TRACE logs — is the gateway container \"$CONTAINER\" running with TRACE=1?)"
+  exit 1
 fi
+
+echo "$TRACE_RAW" | python3 "$(dirname "$0")/format_trace.py"

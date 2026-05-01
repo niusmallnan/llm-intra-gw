@@ -41,19 +41,23 @@ function _M.log_original_request()
 
     local body = read_body()
 
-    ngx.log(ngx.WARN, "[TRACE] === CLIENT REQUEST ===")
-    ngx.log(ngx.WARN, "[TRACE] method: ", ngx.req.get_method())
-    ngx.log(ngx.WARN, "[TRACE] uri:    ", ngx.var.request_uri)
+    ngx.log(ngx.WARN, "[TRACE] ═══ CLIENT REQUEST ═══")
+    ngx.log(ngx.WARN, "[TRACE]   method: ", ngx.req.get_method())
+    ngx.log(ngx.WARN, "[TRACE]   uri:    ", ngx.var.request_uri)
 
+    ngx.log(ngx.WARN, "[TRACE]   headers:")
     local h = ngx.req.get_headers(100)
     for k, v in pairs(h) do
-        ngx.log(ngx.WARN, "[TRACE] client-header  ", k, ": ", v)
+        ngx.log(ngx.WARN, "[TRACE]     ", k, ": ", v)
     end
 
     if body then
-        ngx.log(ngx.WARN, "[TRACE] request-body: ", body)
+        -- Replace newlines so the body stays on a single log line
+        -- (multi-line bodies produce continuation lines without [TRACE])
+        body = string.gsub(body, "\n", " ")
+        ngx.log(ngx.WARN, "[TRACE]   body: ", body)
     else
-        ngx.log(ngx.WARN, "[TRACE] request-body: (empty)")
+        ngx.log(ngx.WARN, "[TRACE]   body: (empty)")
     end
 end
 
@@ -62,20 +66,21 @@ end
 function _M.log_modified_request()
     if not _M.enabled() then return end
 
-    ngx.log(ngx.WARN, "[TRACE] === UPSTREAM REQUEST ===")
-    ngx.log(ngx.WARN, "[TRACE] upstream-url:  ", ngx.var.upstream_target)
+    ngx.log(ngx.WARN, "[TRACE] ═══ UPSTREAM REQUEST ═══")
+    ngx.log(ngx.WARN, "[TRACE]   url: ", ngx.var.upstream_target)
 
+    ngx.log(ngx.WARN, "[TRACE]   headers:")
     local h = ngx.req.get_headers(100)
     for k, v in pairs(h) do
-        ngx.log(ngx.WARN, "[TRACE] upstream-header ", k, ": ", v)
+        ngx.log(ngx.WARN, "[TRACE]     ", k, ": ", v)
     end
 
-    -- Log the current request body (may have been transformed by UPSTREAM_MODE=inhouse)
     local body = read_body()
     if body then
-        ngx.log(ngx.WARN, "[TRACE] request-body: ", body)
+        body = string.gsub(body, "\n", " ")
+        ngx.log(ngx.WARN, "[TRACE]   body: ", body)
     else
-        ngx.log(ngx.WARN, "[TRACE] request-body: (empty)")
+        ngx.log(ngx.WARN, "[TRACE]   body: (empty)")
     end
 end
 
@@ -84,12 +89,13 @@ end
 function _M.log_response_headers()
     if not _M.enabled() then return end
 
-    ngx.log(ngx.WARN, "[TRACE] === UPSTREAM RESPONSE ===")
-    ngx.log(ngx.WARN, "[TRACE] response-status: ", ngx.status)
+    ngx.log(ngx.WARN, "[TRACE] ═══ UPSTREAM RESPONSE ═══")
+    ngx.log(ngx.WARN, "[TRACE]   status: ", ngx.status)
 
+    ngx.log(ngx.WARN, "[TRACE]   headers:")
     local h = ngx.resp.get_headers()
     for k, v in pairs(h) do
-        ngx.log(ngx.WARN, "[TRACE] response-header ", k, ": ", v)
+        ngx.log(ngx.WARN, "[TRACE]     ", k, ": ", v)
     end
 end
 
@@ -104,7 +110,8 @@ function _M.body_filter(chunk, eof)
     end
 
     if eof and ngx.ctx.trace_buf then
-        ngx.log(ngx.WARN, "[TRACE] response-body: ", ngx.ctx.trace_buf)
+        local buf = string.gsub(ngx.ctx.trace_buf, "\n", " ")
+        ngx.log(ngx.WARN, "[TRACE]   body: ", buf)
         ngx.ctx.trace_buf = nil
     end
 end
