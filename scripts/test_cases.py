@@ -186,9 +186,9 @@ def run_tests(gateway_url):
             check("inhouse → model unchanged",
                   '"model":' in echo_body,
                   "model missing")
-            check("inhouse → mode_code equals model",
-                  '"mode_code":' in echo_body,
-                  "mode_code not found")
+            check("inhouse → modeCode equals model",
+                  '"modeCode":' in echo_body,
+                  "modeCode not found")
         else:
             check("inhouse → 200", False, f"got {status}")
 
