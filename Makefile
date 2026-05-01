@@ -35,7 +35,7 @@ health:
 
 # ---- Integration tests (mock upstream + gateway + test cases) ----
 test: build
-	@bash scripts/test.sh
+	@python3 scripts/test.py
 
 # ---- Logs ----
 logs:
