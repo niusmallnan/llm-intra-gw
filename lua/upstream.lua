@@ -227,9 +227,6 @@ function _M.validate()
     if not upstream_base_url then
         return false, "UPSTREAM_BASE_URL is required but not set"
     end
-    if not upstream_api_key or upstream_api_key == "" then
-        return false, "UPSTREAM_API_KEY is required but not set"
-    end
     if not personal_access_code or personal_access_code == "" then
         return false, "PERSONAL_ACCESS_CODE is required but not set"
     end

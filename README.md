@@ -33,7 +33,7 @@ The gateway performs two layers of authentication:
 
 | Header | Source | Description |
 |---|---|---|
-| `apikey` | `UPSTREAM_API_KEY` env var | A shared key obtained from your internal **API Platform**. |
+| `apikey` | `UPSTREAM_API_KEY` env var (optional) | A shared key obtained from your internal **API Platform**. Not injected when unset. |
 | `Authorization` | Fixed prefix `ACCESSCODE` + `PERSONAL_ACCESS_CODE` | Composed as `ACCESSCODE <PERSONAL_ACCESS_CODE>`. `ACCESSCODE` is a fixed prefix; `PERSONAL_ACCESS_CODE` is a personal token from your **LLM platform**. |
 
 The client's original `Authorization` header is **stripped** before the request leaves the gateway — it never reaches your internal API.
@@ -64,7 +64,7 @@ the image or the source code.**
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `UPSTREAM_BASE_URL` | ✅ | — | Base URL of the internal LLM API (e.g. `https://llm-api.example.com`). |
-| `UPSTREAM_API_KEY` | ✅ | — | Shared API key from your internal API Platform. Injected as the `apikey` header. |
+| `UPSTREAM_API_KEY` | ❌ | — | Shared API key from your internal API Platform. Injected as the `apikey` header. Optional — skipped when unset. |
 | `PERSONAL_ACCESS_CODE` | ✅ | — | Personal token from your internal LLM platform. Composed as `Authorization: ACCESSCODE <PERSONAL_ACCESS_CODE>` (the `ACCESSCODE` prefix is hard-coded). |
 | `IP_WHITELIST` | ❌ | *(allow all)* | Comma-separated list of IPs or CIDR ranges allowed to access the gateway (e.g. `10.0.0.0/8,172.16.1.5`). |
 | `FAKE_OPENAI_KEY` | ❌ | *(no client auth)* | An API key that clients must present as `Authorization: Bearer <key>`. When set, requests without a matching key receive a `401`. When unset, no client-side authentication is required. |
