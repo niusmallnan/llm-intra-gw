@@ -48,7 +48,11 @@ Environment variables must be declared in `conf/nginx.conf` under the `env` bloc
 Uses Docker's embedded DNS by default. Override with `RESOLVER` env var when running outside Docker (e.g., set to `8.8.8.8`). The entrypoint script sed-substitutes it at container start.
 
 ### Streaming support toggle
-Streaming is disabled by default. Set `STREAM=true` to enable it — the gateway injects `"stream": true` into the request body, the entrypoint script adjusts `proxy_read_timeout` (3600s) and adds `gzip off`. The `proxy_buffering off` directive is always set.
+`STREAM` env var (default: `auto`). Three modes:
+- `auto` — gateway does not modify the `stream` field; client decides. Proxy timeout is 3600s to accommodate SSE streams.
+- `true` — gateway forces `"stream": true` in the request body, sets `proxy_read_timeout 3600s`, adds `gzip off`.
+- `false` — gateway forces `"stream": false`, `proxy_read_timeout 60s`.
+`proxy_buffering off` is always set.
 
 ### No test framework
 There are no unit tests, linters, or typecheckers for the Lua code. `make test` is just a curl smoke test against a running instance.

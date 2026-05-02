@@ -23,21 +23,35 @@ sed -i "s/resolver 127\.0\.0\.11/resolver $resolver/" \
     /usr/local/openresty/nginx/conf/nginx.conf
 
 # ------------------------------------------------------------------
-# Streaming support (optional, default: disabled)
+# Streaming support (optional, default: auto)
 # ------------------------------------------------------------------
-if [ "${STREAM:-}" = "true" ]; then
-    echo ">> Streaming support enabled"
-    sed -i "s/# @proxy_read_timeout@/proxy_read_timeout 3600s;/" \
-        /usr/local/openresty/nginx/conf/nginx.conf
-    sed -i "s/# @streaming_settings@/gzip off;/" \
-        /usr/local/openresty/nginx/conf/nginx.conf
-else
-    echo ">> Streaming support disabled (use STREAM=true to enable)"
-    sed -i "s/# @proxy_read_timeout@/proxy_read_timeout 60s;/" \
-        /usr/local/openresty/nginx/conf/nginx.conf
-    sed -i "/# @streaming_settings@/d" \
-        /usr/local/openresty/nginx/conf/nginx.conf
-fi
+# auto  — gateway does not modify stream; client decides (long timeout so SSE works)
+# true  — gateway forces stream:true, long timeout, gzip off
+# false — gateway forces stream:false, short timeout
+STREAM_MODE="${STREAM:-auto}"
+case "$STREAM_MODE" in
+    true|1|on|yes)
+        echo ">> Streaming: forced ON"
+        sed -i "s/# @proxy_read_timeout@/proxy_read_timeout 3600s;/" \
+            /usr/local/openresty/nginx/conf/nginx.conf
+        sed -i "s/# @streaming_settings@/gzip off;/" \
+            /usr/local/openresty/nginx/conf/nginx.conf
+        ;;
+    false|0|off|no)
+        echo ">> Streaming: forced OFF"
+        sed -i "s/# @proxy_read_timeout@/proxy_read_timeout 60s;/" \
+            /usr/local/openresty/nginx/conf/nginx.conf
+        sed -i "/# @streaming_settings@/d" \
+            /usr/local/openresty/nginx/conf/nginx.conf
+        ;;
+    *)
+        echo ">> Streaming: auto (client decides)"
+        sed -i "s/# @proxy_read_timeout@/proxy_read_timeout 3600s;/" \
+            /usr/local/openresty/nginx/conf/nginx.conf
+        sed -i "/# @streaming_settings@/d" \
+            /usr/local/openresty/nginx/conf/nginx.conf
+        ;;
+esac
 
 # ------------------------------------------------------------------
 # Validate required environment variables

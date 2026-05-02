@@ -183,17 +183,28 @@ function _M.transform_body()
     ngx.req.set_body_data(cjson.encode(result))
 end
 
--- Inject "stream": true into the request body when the STREAM env var is
--- set to a truthy value (1/true/on/yes).  This makes the upstream API
--- return a streaming SSE response.
+-- Inject or override "stream" in the request body based on the STREAM env var:
+--   "auto"  (default) — do nothing; client controls streaming
+--   "true"  — force "stream": true  (enable SSE streaming)
+--   "false" — force "stream": false (disable SSE streaming)
 function _M.apply_stream()
     local val = os.getenv("STREAM")
-    if not val then
-        return
+    if not val or val == "" then
+        val = "auto"
     end
     val = val:lower()
-    if val ~= "1" and val ~= "true" and val ~= "on" and val ~= "yes" then
+
+    if val == "auto" then
         return
+    end
+
+    local stream_val
+    if val == "true" or val == "1" or val == "on" or val == "yes" then
+        stream_val = true
+    elseif val == "false" or val == "0" or val == "off" or val == "no" then
+        stream_val = false
+    else
+        return  -- unrecognised value, treat as auto
     end
 
     ngx.req.read_body()
@@ -207,7 +218,7 @@ function _M.apply_stream()
         return
     end
 
-    data["stream"] = true
+    data["stream"] = stream_val
     ngx.req.set_body_data(cjson.encode(data))
 end
 
