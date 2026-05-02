@@ -4,14 +4,23 @@
 set -e
 
 # ------------------------------------------------------------------
-# Resolver override
+# DNS resolver
 # ------------------------------------------------------------------
-# If the user set RESOLVER, substitute the default 127.0.0.11 in nginx.conf.
+# Needed because proxy_pass uses a variable (runtime resolution).
+# 1. Use explicitly configured RESOLVER if set.
+# 2. Otherwise auto-detect from /etc/resolv.conf (covers Docker default bridge).
+# 3. Fallback: leave 127.0.0.11 (works in Docker Compose user-defined networks).
 if [ -n "$RESOLVER" ]; then
-    echo ">> Setting DNS resolver to $RESOLVER"
-    sed -i "s/resolver 127\.0\.0\.11/resolver $RESOLVER/" \
-        /usr/local/openresty/nginx/conf/nginx.conf
+    resolver="$RESOLVER"
+else
+    resolver=$(awk '/^nameserver/ { print $2; exit }' /etc/resolv.conf 2>/dev/null || true)
+    if [ -z "$resolver" ]; then
+        resolver="127.0.0.11"
+    fi
 fi
+echo ">> DNS resolver: $resolver"
+sed -i "s/resolver 127\.0\.0\.11/resolver $resolver/" \
+    /usr/local/openresty/nginx/conf/nginx.conf
 
 # ------------------------------------------------------------------
 # Streaming support (optional, default: disabled)

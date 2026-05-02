@@ -18,7 +18,7 @@ fi
 
 RESPONSE=$(curl -s -w '\n%{http_code}' -X POST "${GATEWAY_URL}/v1/chat/completions" \
   -H 'Content-Type: application/json' \
-  "${AUTH_ARG[@]}" \
+  ${AUTH_ARG[@]+"${AUTH_ARG[@]}"} \
   -d "$REQUEST_BODY")
 
 HTTP_CODE=$(echo "$RESPONSE" | tail -1)
