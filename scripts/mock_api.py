@@ -32,31 +32,84 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return ""
         return self.rfile.read(length).decode("utf-8", errors="replace")
 
-    def _echo(self, status=200):
-        body = self._read_body()
-        # Parse JSON body if present
-        parsed = None
-        if body.strip():
-            try:
-                parsed = json.loads(body)
-            except json.JSONDecodeError:
-                parsed = {"raw": body}
+    def _echo(self, body_data=None):
+        if body_data is None:
+            body_raw = self._read_body()
+            if body_raw.strip():
+                try:
+                    body_data = json.loads(body_raw)
+                except json.JSONDecodeError:
+                    body_data = {"raw": body_raw}
 
-        self._send_json(status, {
+        self._send_json(200, {
             "echo": {
                 "method": self.command,
                 "path": self.path,
                 "headers": dict(self.headers),
-                "body": parsed,
+                "body": body_data,
             }
         })
+
+    def _send_sse_event(self, data):
+        """Send one SSE event (data: <json>\n\n)."""
+        payload = "data: " + json.dumps(data, ensure_ascii=False) + "\n\n"
+        self.wfile.write(payload.encode())
+        self.wfile.flush()
+
+    def _send_sse_stream(self, body_data):
+        """Return a test SSE stream with chunks that trigger response transformation."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+
+        model = body_data.get("model", "test")
+
+        # Chunk 1: content="" with tool_calls → gateway should change content to null
+        self._send_sse_event({
+            "id": "chunk-1",
+            "object": "chat.completion.chunk",
+            "created": 1715555555,
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "content": "",
+                    "tool_calls": [{
+                        "index": 0,
+                        "id": "call_test123",
+                        "type": "function",
+                        "function": {
+                            "name": "get_current_weather",
+                            "arguments": ""
+                        }
+                    }]
+                }
+            }]
+        })
+
+        # Chunk 2: regular content (no tool_calls) → should pass through unchanged
+        self._send_sse_event({
+            "id": "chunk-2",
+            "object": "chat.completion.chunk",
+            "created": 1715555555,
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "content": "The weather in Shenyang is sunny."
+                }
+            }]
+        })
+
+        # Chunk 3: DONE marker
+        self.wfile.write("data: [DONE]\n\n".encode())
+        self.wfile.flush()
 
     def do_GET(self):
         self._echo()
 
     def do_POST(self):
-        # Reject non-JSON requests (mirrors the gateway's own validation for
-        # realistic upstream behaviour).
         ct = self.headers.get("Content-Type", "")
         if ct and not ct.lower().startswith("application/json"):
             self._send_json(415, {
@@ -66,7 +119,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 }
             })
             return
-        self._echo()
+
+        body_raw = self._read_body()
+        body_data = None
+        if body_raw.strip():
+            try:
+                body_data = json.loads(body_raw)
+            except json.JSONDecodeError:
+                body_data = {"raw": body_raw}
+
+        # If the client requests streaming, return SSE test chunks.
+        if body_data and isinstance(body_data, dict) and body_data.get("stream") is True:
+            self._send_sse_stream(body_data)
+            return
+
+        self._echo(body_data)
 
     def do_PUT(self):
         self._echo()

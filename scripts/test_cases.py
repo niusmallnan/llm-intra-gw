@@ -16,6 +16,7 @@ Usage:
   python3 scripts/test_cases.py http://localhost:8080
 """
 
+import json
 import re
 import os
 import sys
@@ -66,7 +67,41 @@ def http_post(url, body, headers=None):
         return 0, ""
 
 
+def http_post_stream(url, body, headers=None):
+    """Send a POST request and return the raw response body (for SSE streaming)."""
+    if headers is None:
+        headers = {}
+    data = body.encode() if isinstance(body, str) else body
+    try:
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status, resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode("utf-8", errors="replace")
+    except Exception:
+        return 0, ""
+
+
+def parse_sse_events(raw):
+    """Parse SSE response, returning list of parsed JSON objects (None for non-JSON events)."""
+    events = []
+    parts = raw.split("\n\n")
+    for part in parts:
+        part = part.strip()
+        if not part or part == "data: [DONE]":
+            continue
+        if part.startswith("data: "):
+            json_str = part[len("data: "):]
+            try:
+                events.append(json.loads(json_str))
+            except json.JSONDecodeError:
+                events.append(None)
+    return events
+
+
 def run_tests(gateway_url):
+    upstream_mode = os.environ.get("UPSTREAM_MODE", "")
+
     # --- 1. health check (no auth needed) ---
     status, _ = http_get(f"{gateway_url}/health")
     check("GET /health → 200", status == 200, f"got {status}")
@@ -136,7 +171,6 @@ def run_tests(gateway_url):
               "header not found")
 
         # body preserved (openai) / transformed (inhouse)
-        upstream_mode = os.environ.get("UPSTREAM_MODE", "")
         if upstream_mode == "inhouse":
             check("chat/completions → messages → contextMessage",
                   '"contextMessage":' in echo_body,
@@ -167,8 +201,41 @@ def run_tests(gateway_url):
     )
     check("POST with json+charset → 200", status == 200, f"got {status}")
 
-    # --- 15-19. in-house mode: body transformation ---
-    upstream_mode = os.environ.get("UPSTREAM_MODE", "")
+    # --- 15. SSE response: content="" + tool_calls → content:null ---
+    # Only applies in openai mode (response_transform deactivates for inhouse).
+    if upstream_mode != "inhouse":
+        sse_body = json.dumps({
+            "model": "test",
+            "messages": [{"role": "user", "content": "weather?"}],
+            "stream": True,
+        })
+        status, raw_sse = http_post_stream(
+            f"{gateway_url}/v1/chat/completions",
+            sse_body,
+            headers={"Content-Type": "application/json", **AUTH_HEADER},
+        )
+        if status == 200:
+            events = parse_sse_events(raw_sse)
+            if len(events) >= 2:
+                chunk1 = events[0]
+                delta1 = (chunk1.get("choices", [{}])[0] or {}).get("delta", {})
+                has_tool_calls = "tool_calls" in delta1
+                content_is_null = delta1.get("content") is None
+                check("SSE → content:null when tool_calls present",
+                      has_tool_calls and content_is_null,
+                      f"content={delta1.get('content')!r} tool_calls={'yes' if has_tool_calls else 'no'}")
+
+                chunk2 = events[1]
+                delta2 = (chunk2.get("choices", [{}])[0] or {}).get("delta", {})
+                check("SSE → regular content unchanged",
+                      delta2.get("content") == "The weather in Shenyang is sunny.",
+                      f"content={delta2.get('content')!r}")
+            else:
+                check("SSE → got SSE events", False, f"only {len(events)} events parsed")
+        else:
+            check("SSE → 200", False, f"got {status}")
+
+    # --- 16-20. in-house mode: body transformation ---
     if upstream_mode == "inhouse":
         req_body = '{"model":"test","messages":[{"role":"user","content":"hi"}],"max_tokens":100,"top_p":0.9}'
         status, echo_body = http_post(
