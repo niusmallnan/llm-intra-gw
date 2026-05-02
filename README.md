@@ -76,7 +76,7 @@ the image or the source code.**
 | `STREAM` | ❌ | `auto` | Streaming mode. `auto` — client decides (gateway does not touch the `stream` field). `true` — gateway forces `"stream": true`, sets `proxy_read_timeout 3600s`, disables `gzip`. `false` — gateway forces `"stream": false`. |
 | `STRIP_REQUEST_PATH` | ❌ | `true` | When `true` (default), proxy requests directly to `UPSTREAM_BASE_URL`. When `false`, append the original request URI (e.g. `/v1/chat/completions`). |
 | `TRACE` | ❌ | *(off)* | Enable request/response tracing to the error log for debugging. Set to `1`, `true`, `on`, or `yes` to log: client request (headers + body), gateway-modified upstream request (injected headers + target URL), and upstream response (status + headers + full body). |
-| `UPSTREAM_MODE` | ❌ | `openai` | Upstream API mode. `openai` (default) proxies requests as-is. `inhouse` transforms the request body: renames `messages` to `contextMessage` and converts root-level keys from `snake_case` to `camelCase` (e.g. `max_tokens` → `maxTokens`). |
+| `UPSTREAM_MODE` | ❌ | `openai` | Upstream API mode. `openai` (default) proxies requests as-is. `inhouse` **(experimental)** transforms the request body: renames `messages` to `contextMessage` and converts root-level keys from `snake_case` to `camelCase` (e.g. `max_tokens` → `maxTokens`). |
 
 ## Endpoints
 
@@ -104,7 +104,7 @@ the image or the source code.**
    - If `FAKE_OPENAI_KEY` is configured, the client's `Authorization: Bearer <key>`
      header is validated **first** (before any header modification). Mismatched or
      missing keys receive a `401`.
-   - If `UPSTREAM_MODE=inhouse`, the request body is transformed: root-level
+   - **Experimental:** If `UPSTREAM_MODE=inhouse`, the request body is transformed: root-level
      `snake_case` keys are converted to `camelCase` (e.g. `max_tokens` →
      `maxTokens`), and the `messages` field is renamed to `contextMessage`.
    - If `STREAM` is `true` or `false`, `"stream"` is set accordingly in the request body.
