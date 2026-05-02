@@ -47,10 +47,12 @@ docker build -t llm-intra-gw .
 # 2. Run with your credentials
 docker run --rm -p 8080:8080 \
   -e UPSTREAM_BASE_URL=https://llm-api.internal.example.com \
-  -e UPSTREAM_API_KEY="your-shared-api-key" \
   -e PERSONAL_ACCESS_CODE="your-personal-token" \
   -e FAKE_OPENAI_KEY="sk-your-fake-openai-key" \
   llm-intra-gw
+
+# Optional: inject the upstream API key header
+#  -e UPSTREAM_API_KEY="your-shared-api-key"
 ```
 
 Point your agent's `OPENAI_BASE_URL` (or equivalent) at `http://localhost:8080`
@@ -107,7 +109,7 @@ the image or the source code.**
      `maxTokens`), and the `messages` field is renamed to `contextMessage`.
    - If `STREAM` is `true` or `false`, `"stream"` is set accordingly in the request body.
    - The client's original `Authorization` header is stripped.
-   - `apikey` and `Authorization` (`ACCESSCODE <PERSONAL_ACCESS_CODE>`) headers are injected.
+   - `apikey` (when `UPSTREAM_API_KEY` is set) and `Authorization` (`ACCESSCODE <PERSONAL_ACCESS_CODE>`) headers are injected.
    - Any `EXTRA_HEADERS` are applied (except `apikey` and `Authorization`,
      which are reserved).
 
@@ -134,11 +136,11 @@ Create a `.env` file:
 
 ```bash
 UPSTREAM_BASE_URL=https://llm-api.internal.example.com
-UPSTREAM_API_KEY=your-shared-api-key
 PERSONAL_ACCESS_CODE=your-personal-token
 FAKE_OPENAI_KEY=sk-your-fake-openai-key
 IP_WHITELIST=10.0.0.0/8
 EXTRA_HEADERS={"X-Department":"ai-platform"}
+# UPSTREAM_API_KEY=your-shared-api-key  # optional, injects apikey header
 # STREAM=true             # optional, force streaming on
 # TRACE=1                # optional, log request/response details for debugging
 ```
@@ -157,7 +159,7 @@ kind: Secret
 metadata:
   name: gateway-secrets
 stringData:
-  UPSTREAM_API_KEY: "your-shared-api-key"
+  # UPSTREAM_API_KEY: "your-shared-api-key"  # optional — injects apikey header
   PERSONAL_ACCESS_CODE: "your-personal-token"
 ---
 apiVersion: apps/v1
@@ -182,11 +184,11 @@ spec:
         env:
         - name: UPSTREAM_BASE_URL
           value: "https://llm-api.internal.example.com"
-        - name: UPSTREAM_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: gateway-secrets
-              key: UPSTREAM_API_KEY
+        # - name: UPSTREAM_API_KEY               # optional — injects apikey header
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: gateway-secrets
+        #       key: UPSTREAM_API_KEY
         - name: PERSONAL_ACCESS_CODE
           valueFrom:
             secretKeyRef:
