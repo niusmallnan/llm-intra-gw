@@ -16,7 +16,7 @@ request → nginx.conf /v1/models location
 ```
 
 - `lua/auth.lua` — IP whitelist check via `IP_WHITELIST` env var (comma-separated IPs/CIDRs). Empty = allow all. Client key validation via `FAKE_OPENAI_KEY` — when set, the client must present `Authorization: Bearer <FAKE_OPENAI_KEY>` or receive a `401`.
-- `lua/upstream.lua` — Content-Type validation (only `application/json` accepted), builds upstream URL from `UPSTREAM_BASE_URL` (strips request URI by default; set `STRIP_REQUEST_PATH=false` to append it), injects `apikey` (from `UPSTREAM_API_KEY`) and `Authorization: ACCESSCODE <PERSONAL_ACCESS_CODE>` headers, strips the client's original `Authorization`. When `UPSTREAM_MODE=inhouse`, transforms the request body: renames `messages` → `contextMessage` and converts root-level keys from `snake_case` to `camelCase` (e.g. `max_tokens` → `maxTokens`).
+- `lua/upstream.lua` — Content-Type validation (only `application/json` accepted), builds upstream URL from `UPSTREAM_BASE_URL` (strips request URI by default; set `STRIP_REQUEST_PATH=false` to append it), injects `apikey` (from `UPSTREAM_API_KEY`) and `Authorization: ACCESSCODE <PERSONAL_ACCESS_CODE>` headers, strips the client's original `Authorization`. When `UPSTREAM_MODE=inhouse`, transforms the request body: renames `messages` → `contextMessage` and converts root-level keys from `snake_case` to `camelCase` (e.g. `max_tokens` → `maxTokens`). When `STREAM=true`, injects `"stream": true` into the request body.
 - `lua/models.lua` — returns a curated subset of models (`DeepSeek-V4-Pro`, `GLM-5.1`). Edit the `MODELS` table to add/remove entries.
 - `lua/trace.lua` — request/response tracing for debugging. When `TRACE` env var is set (`1`/`true`/`on`/`yes`), logs to error log: client request (headers + body), modified upstream request (injected headers + target URL + potentially transformed body), and upstream response (status + headers + full body).
 - `conf/nginx.conf` — declares all env vars via `env` directive (required for `os.getenv()` in Lua) and defines `lua_package_path`.
@@ -48,7 +48,7 @@ Environment variables must be declared in `conf/nginx.conf` under the `env` bloc
 Uses Docker's embedded DNS by default. Override with `RESOLVER` env var when running outside Docker (e.g., set to `8.8.8.8`). The entrypoint script sed-substitutes it at container start.
 
 ### Streaming support toggle
-Streaming (`stream: true`) is disabled by default. Set `ENABLE_STREAMING=true` to enable it — the entrypoint script adjusts `proxy_read_timeout` (3600s) and adds `gzip off`. The `proxy_buffering off` directive is always set. The gateway itself doesn't inspect request bodies; streaming is a client/upstream concern — the toggle only tunes nginx for long-lived SSE connections.
+Streaming is disabled by default. Set `STREAM=true` to enable it — the gateway injects `"stream": true` into the request body, the entrypoint script adjusts `proxy_read_timeout` (3600s) and adds `gzip off`. The `proxy_buffering off` directive is always set.
 
 ### No test framework
 There are no unit tests, linters, or typecheckers for the Lua code. `make test` is just a curl smoke test against a running instance.

@@ -13,6 +13,7 @@
 --   resolve()        — build the full upstream URL for the current request
 --   inject_headers() — attach enterprise-required headers to the proxied request
 --   transform_body() — convert request body fields for in-house API (UPSTREAM_MODE=inhouse)
+--   apply_stream()   — inject stream:true into the request body when STREAM is enabled
 
 local cjson = require "cjson"
 
@@ -180,6 +181,34 @@ function _M.transform_body()
     result["question"] = " "
 
     ngx.req.set_body_data(cjson.encode(result))
+end
+
+-- Inject "stream": true into the request body when the STREAM env var is
+-- set to a truthy value (1/true/on/yes).  This makes the upstream API
+-- return a streaming SSE response.
+function _M.apply_stream()
+    local val = os.getenv("STREAM")
+    if not val then
+        return
+    end
+    val = val:lower()
+    if val ~= "1" and val ~= "true" and val ~= "on" and val ~= "yes" then
+        return
+    end
+
+    ngx.req.read_body()
+    local body = ngx.req.get_body_data()
+    if not body or body == "" then
+        return
+    end
+
+    local ok, data = pcall(cjson.decode, body)
+    if not ok or type(data) ~= "table" then
+        return
+    end
+
+    data["stream"] = true
+    ngx.req.set_body_data(cjson.encode(data))
 end
 
 -- Validate that required configuration is present.

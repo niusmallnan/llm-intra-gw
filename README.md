@@ -71,7 +71,7 @@ the image or the source code.**
 | `EXTRA_HEADERS` | ❌ | `{}` | Additional headers to inject, as a JSON object (e.g. `{"X-Department":"ai","X-Tenant":"default"}`). |
 | `RESOLVER` | ❌ | `127.0.0.11` | DNS resolver IP. Override if not running inside Docker. |
 | `GATEWAY_PORT` | ❌ | `8080` | Port the gateway listens on inside the container. |
-| `ENABLE_STREAMING` | ❌ | `false` | Enable SSE streaming support (`stream: true`). When enabled, `proxy_read_timeout` is set to 3600s and `gzip` is disabled. |
+| `STREAM` | ❌ | `false` | Enable SSE streaming support. When enabled, the gateway injects `"stream": true` into the request body, `proxy_read_timeout` is set to 3600s, and `gzip` is disabled. |
 | `STRIP_REQUEST_PATH` | ❌ | `true` | When `true` (default), proxy requests directly to `UPSTREAM_BASE_URL`. When `false`, append the original request URI (e.g. `/v1/chat/completions`). |
 | `TRACE` | ❌ | *(off)* | Enable request/response tracing to the error log for debugging. Set to `1`, `true`, `on`, or `yes` to log: client request (headers + body), gateway-modified upstream request (injected headers + target URL), and upstream response (status + headers + full body). |
 | `UPSTREAM_MODE` | ❌ | `openai` | Upstream API mode. `openai` (default) proxies requests as-is. `inhouse` transforms the request body: renames `messages` to `contextMessage` and converts root-level keys from `snake_case` to `camelCase` (e.g. `max_tokens` → `maxTokens`). |
@@ -81,11 +81,11 @@ the image or the source code.**
 | Path | Method | Description |
 |---|---|---|
 | `/health` | `GET` | Health check. Returns `{"status":"ok"}`. |
-| `/v1/chat/completions` | `POST` | Chat completions (non-streaming by default; streaming requires `ENABLE_STREAMING=true`). |
+| `/v1/chat/completions` | `POST` | Chat completions (non-streaming by default; streaming requires `STREAM=true`). |
 | `/v1/models` | `GET` | Curated model list (`DeepSeek-V4-Pro`, `GLM-5.1`). |
 | `/v1/*` | `*` | All other OpenAI-compatible endpoints are proxied transparently. |
 
-> **Streaming support:** Set `ENABLE_STREAMING=true` to proxy SSE stream responses
+> **Streaming support:** Set `STREAM=true` to proxy SSE stream responses
 > (`stream: true`).  When disabled (default), the gateway is tuned for standard
 > request/response performance.
 
@@ -105,6 +105,7 @@ the image or the source code.**
    - If `UPSTREAM_MODE=inhouse`, the request body is transformed: root-level
      `snake_case` keys are converted to `camelCase` (e.g. `max_tokens` →
      `maxTokens`), and the `messages` field is renamed to `contextMessage`.
+   - If `STREAM=true`, `"stream": true` is injected into the request body.
    - The client's original `Authorization` header is stripped.
    - `apikey` and `Authorization` (`ACCESSCODE <PERSONAL_ACCESS_CODE>`) headers are injected.
    - Any `EXTRA_HEADERS` are applied (except `apikey` and `Authorization`,
@@ -138,7 +139,7 @@ PERSONAL_ACCESS_CODE=your-personal-token
 FAKE_OPENAI_KEY=sk-your-fake-openai-key
 IP_WHITELIST=10.0.0.0/8
 EXTRA_HEADERS={"X-Department":"ai-platform"}
-# ENABLE_STREAMING=true  # optional, enable to support `stream: true`
+# STREAM=true             # optional, enable to support streaming
 # TRACE=1                # optional, log request/response details for debugging
 ```
 
