@@ -112,6 +112,18 @@ local function drain_sse(buf)
     return output, buf
 end
 
+-- Called from header_filter_by_lua_block.  For SSE responses we must
+-- clear Content-Length before headers are sent because the body_filter
+-- may modify the body size (e.g. content:"" → content:null).
+function _M.header_filter()
+    if not active() then
+        return
+    end
+    if is_sse() then
+        ngx.header["Content-Length"] = nil
+    end
+end
+
 -- Called from body_filter_by_lua_block.  Buffers SSE chunks, transforms
 -- chat.completion.chunk events, and forwards immediately.  Non-SSE
 -- responses pass through unchanged.
@@ -123,11 +135,6 @@ function _M.body_filter(chunk, eof)
     if not is_sse() then
         return
     end
-
-    -- If this is the first SSE chunk, clear Content-Length
-    -- (body_filter may run before any data has been sent with proxy_buffering off,
-    -- so we clear here in case header_filter missed it).
-    ngx.header["Content-Length"] = nil
 
     local buf = ngx.ctx.response_transform_buf or ""
 
