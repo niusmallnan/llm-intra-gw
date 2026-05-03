@@ -17,6 +17,24 @@
 
 local cjson = require "cjson"
 
+-- Read the request body, falling back to the temp file when the body exceeds
+-- client_body_buffer_size and nginx buffers it to disk.
+local function read_body()
+    ngx.req.read_body()
+    local body = ngx.req.get_body_data()
+    if not body then
+        local file = ngx.req.get_body_file()
+        if file then
+            local f = io.open(file, "r")
+            if f then
+                body = f:read("*all")
+                f:close()
+            end
+        end
+    end
+    return body
+end
+
 local _M = {}
 
 -- ---------------------------------------------------------------------------
@@ -155,8 +173,7 @@ function _M.transform_body()
         return
     end
 
-    ngx.req.read_body()
-    local body = ngx.req.get_body_data()
+    local body = read_body()
     if not body or body == "" then
         return
     end
@@ -207,8 +224,7 @@ function _M.apply_stream()
         return  -- unrecognised value, treat as auto
     end
 
-    ngx.req.read_body()
-    local body = ngx.req.get_body_data()
+    local body = read_body()
     if not body or body == "" then
         return
     end
