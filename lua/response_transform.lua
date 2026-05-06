@@ -6,12 +6,16 @@
 --
 -- This fixes compatibility with clients that reject empty-string content
 -- when tool calls are present.
+--
+-- Also detects upstream error responses (200 with JSON "code" field).  When
+-- code equals "A1010" (rate limit), the response body is cleared so the
+-- client can retry.
 
 local cjson = require "cjson"
 
 local _M = {}
 
--- Check whether the module should be active for this response.
+-- Check whether the SSE transform should be active for this response.
 local function active()
     local mode = os.getenv("UPSTREAM_MODE")
     if mode and mode ~= "" and mode:lower() ~= "openai" then
@@ -113,119 +117,83 @@ local function drain_sse(buf)
 end
 
 -- Called from header_filter_by_lua_block.  For SSE responses we must
--- clear Content-Length before headers are sent because the body_filter
--- may modify the body size (e.g. content:"" → content:null).
+-- clear Content-Length because the body_filter may modify the body size
+-- (content:"" → content:null or A1010 body clearing).
 function _M.header_filter()
-    if not active() then
-        return
-    end
     if is_sse() then
         ngx.header["Content-Length"] = nil
     end
 end
 
--- Called from body_filter_by_lua_block at EOF.  When the upstream returns a
--- 200 with JSON body (non-SSE or SSE) that contains a "code" field (upstream
--- error indicator), logs the body for troubleshooting.
-function _M.validate_response(chunk, eof)
-    if ngx.status ~= 200 then
-        return
-    end
-
+-- Called from body_filter_by_lua_block for every response chunk.
+-- For JSON and SSE responses: accumulates raw chunks, suppresses output
+-- until EOF, then inspects for upstream error codes, applies SSE
+-- transform if needed, and outputs (or clears body on A1010).
+-- Non-JSON/non-SSE responses pass through unchanged.
+function _M.body_filter(chunk, eof)
     local ct = ngx.header["Content-Type"] or ""
-    local is_sse = ct:find("text/event-stream", 1, true) ~= nil
-    if not is_sse and not ct:find("application/json", 1, true) then
+    local is_sse_resp = ct:find("text/event-stream", 1, true) ~= nil
+    local is_json = ct:find("application/json", 1, true) ~= nil
+
+    -- Only buffer and inspect JSON / SSE responses.
+    if not is_sse_resp and not is_json then
         return
     end
 
-    -- Accumulate the full body across chunks.
+    -- Accumulate raw chunks; suppress output until EOF.
     if chunk then
-        ngx.ctx.validate_buf = (ngx.ctx.validate_buf or "") .. chunk
+        ngx.ctx.response_buf = (ngx.ctx.response_buf or "") .. chunk
     end
+    ngx.arg[1] = ""
+
     if not eof then
         return
     end
 
-    local body = ngx.ctx.validate_buf
-    ngx.ctx.validate_buf = nil
-    if not body or body == "" then
+    local body = ngx.ctx.response_buf or ""
+    ngx.ctx.response_buf = nil
+    if body == "" then
         return
     end
 
-    if is_sse then
-        -- SSE: each event is "data: <json>\n\n".  Check every data line for "code".
-        local pos = 1
-        while pos <= #body do
-            local s, e = body:find("data:%s*", pos)
-            if not s then break end
-            s = e + 1
-            e = body:find("\n", s)
-            local json_str
-            if e then
-                json_str = body:sub(s, e - 1)
-                pos = e + 1
-            else
-                json_str = body:sub(s)
-                pos = #body + 1
-            end
-            local ok, data = pcall(cjson.decode, json_str)
+    -- Check for upstream error codes on 200 responses.
+    if ngx.status == 200 then
+        if is_json then
+            local ok, data = pcall(cjson.decode, body)
             if ok and type(data) == "table" and data.code ~= nil then
-                local safe = json_str
-                pcall(function() safe = json_str:sub(1, 1000) end)
+                local safe = body
+                pcall(function() safe = body:sub(1, 1000) end)
                 ngx.log(ngx.WARN,
-                    "[UPSTREAM-ERROR] status=200, SSE chunk, code=", tostring(data.code),
+                    "[UPSTREAM-ERROR] status=200, code=", tostring(data.code),
                     ", body: ", safe)
+                if tostring(data.code) == "A1010" then
+                    return  -- body was cleared (ngx.arg[1] remains "")
+                end
+            end
+        else  -- SSE
+            for json_str in body:gmatch("data:%s*(.-)\n") do
+                local ok, data = pcall(cjson.decode, json_str)
+                if ok and type(data) == "table" and data.code ~= nil then
+                    local safe = json_str
+                    pcall(function() safe = json_str:sub(1, 1000) end)
+                    ngx.log(ngx.WARN,
+                        "[UPSTREAM-ERROR] status=200, SSE chunk, code=", tostring(data.code),
+                        ", body: ", safe)
+                    if tostring(data.code) == "A1010" then
+                        return  -- body cleared for retry
+                    end
+                end
             end
         end
-        return
     end
 
-    -- Non-SSE JSON body.
-    local ok, data = pcall(cjson.decode, body)
-    if not ok or type(data) ~= "table" then
-        return
+    -- Apply SSE content:"" → null transform (openai mode only).
+    if is_sse_resp and active() then
+        local output, _ = drain_sse(body)
+        ngx.arg[1] = output
+    else
+        ngx.arg[1] = body
     end
-
-    if data.code == nil then
-        return
-    end
-
-    local safe = body
-    pcall(function() safe = body:sub(1, 1000) end)
-
-    ngx.log(ngx.WARN,
-        "[UPSTREAM-ERROR] status=200, code=", tostring(data.code),
-        ", body: ", safe)
-end
-
--- Called from body_filter_by_lua_block.  Buffers SSE chunks, transforms
--- chat.completion.chunk events, and forwards immediately.  Non-SSE
--- responses pass through unchanged.
-function _M.body_filter(chunk, eof)
-    if not active() then
-        return
-    end
-
-    if not is_sse() then
-        return
-    end
-
-    local buf = ngx.ctx.response_transform_buf or ""
-
-    if chunk then
-        buf = buf .. chunk
-    end
-
-    local output, remainder = drain_sse(buf)
-    ngx.ctx.response_transform_buf = remainder
-
-    if eof and #remainder > 0 then
-        -- Flush any remaining data (e.g. a partial event, DONE, or trailing newlines)
-        output = output .. remainder
-        ngx.ctx.response_transform_buf = nil
-    end
-
-    ngx.arg[1] = output
 end
 
 return _M
