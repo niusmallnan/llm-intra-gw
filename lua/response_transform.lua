@@ -124,6 +124,70 @@ function _M.header_filter()
     end
 end
 
+-- Called from body_filter_by_lua_block at EOF.  Checks whether a 200 response
+-- body conforms to an OpenAI-compatible format and logs a warning when it does not.
+-- Non-200 responses and SSE streams are skipped — the client or upstream handles
+-- those error paths.
+function _M.validate_response(chunk, eof)
+    if ngx.status ~= 200 then
+        return
+    end
+
+    -- Accumulate the full body across chunks.
+    if chunk then
+        ngx.ctx.validate_buf = (ngx.ctx.validate_buf or "") .. chunk
+    end
+    if not eof then
+        return
+    end
+
+    local body = ngx.ctx.validate_buf
+    ngx.ctx.validate_buf = nil
+    if not body or body == "" then
+        return
+    end
+
+    -- Truncate for safe logging (some upstream errors return huge HTML pages).
+    local safe = body
+    local truncate_ok = pcall(function()
+        safe = body:sub(1, 1000)
+    end)
+    if not truncate_ok then
+        safe = "(binary/non-string body)"
+    end
+
+    local ct = ngx.header["Content-Type"] or ""
+
+    -- SSE streaming responses are validated chunk-by-chunk by the client.
+    if ct:find("text/event-stream", 1, true) then
+        return
+    end
+
+    if ct:find("application/json", 1, true) then
+        local ok, data = pcall(cjson.decode, body)
+        if not ok or type(data) ~= "table" then
+            ngx.log(ngx.WARN,
+                "[NON-STANDARD] status=200, Content-Type=", ct,
+                ", unparseable JSON body: ", safe)
+            return
+        end
+        -- All OpenAI responses carry an "object" field
+        -- (chat.completion, chat.completion.chunk, list, embedding, …).
+        if type(data.object) == "string" then
+            return
+        end
+        ngx.log(ngx.WARN,
+            "[NON-STANDARD] status=200, Content-Type=", ct,
+            ", non-OpenAI JSON body: ", safe)
+        return
+    end
+
+    -- Non-JSON, non-SSE Content-Type on a 200 response (e.g. HTML error page).
+    ngx.log(ngx.WARN,
+        "[NON-STANDARD] status=200, Content-Type=", ct,
+        ", body: ", safe)
+end
+
 -- Called from body_filter_by_lua_block.  Buffers SSE chunks, transforms
 -- chat.completion.chunk events, and forwards immediately.  Non-SSE
 -- responses pass through unchanged.
