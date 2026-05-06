@@ -124,12 +124,17 @@ function _M.header_filter()
     end
 end
 
--- Called from body_filter_by_lua_block at EOF.  Checks whether a 200 response
--- body conforms to an OpenAI-compatible format and logs a warning when it does not.
--- Non-200 responses and SSE streams are skipped — the client or upstream handles
--- those error paths.
+-- Called from body_filter_by_lua_block at EOF.  When the upstream returns a
+-- 200 with JSON body (non-SSE or SSE) that contains a "code" field (upstream
+-- error indicator), logs the body for troubleshooting.
 function _M.validate_response(chunk, eof)
     if ngx.status ~= 200 then
+        return
+    end
+
+    local ct = ngx.header["Content-Type"] or ""
+    local is_sse = ct:find("text/event-stream", 1, true) ~= nil
+    if not is_sse and not ct:find("application/json", 1, true) then
         return
     end
 
@@ -147,44 +152,49 @@ function _M.validate_response(chunk, eof)
         return
     end
 
-    -- Truncate for safe logging (some upstream errors return huge HTML pages).
+    if is_sse then
+        -- SSE: each event is "data: <json>\n\n".  Check every data line for "code".
+        local pos = 1
+        while pos <= #body do
+            local s, e = body:find("data:%s*", pos)
+            if not s then break end
+            s = e + 1
+            e = body:find("\n", s)
+            local json_str
+            if e then
+                json_str = body:sub(s, e - 1)
+                pos = e + 1
+            else
+                json_str = body:sub(s)
+                pos = #body + 1
+            end
+            local ok, data = pcall(cjson.decode, json_str)
+            if ok and type(data) == "table" and data.code ~= nil then
+                local safe = json_str
+                pcall(function() safe = json_str:sub(1, 1000) end)
+                ngx.log(ngx.WARN,
+                    "[UPSTREAM-ERROR] status=200, SSE chunk, code=", tostring(data.code),
+                    ", body: ", safe)
+            end
+        end
+        return
+    end
+
+    -- Non-SSE JSON body.
+    local ok, data = pcall(cjson.decode, body)
+    if not ok or type(data) ~= "table" then
+        return
+    end
+
+    if data.code == nil then
+        return
+    end
+
     local safe = body
-    local truncate_ok = pcall(function()
-        safe = body:sub(1, 1000)
-    end)
-    if not truncate_ok then
-        safe = "(binary/non-string body)"
-    end
+    pcall(function() safe = body:sub(1, 1000) end)
 
-    local ct = ngx.header["Content-Type"] or ""
-
-    -- SSE streaming responses are validated chunk-by-chunk by the client.
-    if ct:find("text/event-stream", 1, true) then
-        return
-    end
-
-    if ct:find("application/json", 1, true) then
-        local ok, data = pcall(cjson.decode, body)
-        if not ok or type(data) ~= "table" then
-            ngx.log(ngx.WARN,
-                "[NON-STANDARD] status=200, Content-Type=", ct,
-                ", unparseable JSON body: ", safe)
-            return
-        end
-        -- All OpenAI responses carry an "object" field
-        -- (chat.completion, chat.completion.chunk, list, embedding, …).
-        if type(data.object) == "string" then
-            return
-        end
-        ngx.log(ngx.WARN,
-            "[NON-STANDARD] status=200, Content-Type=", ct,
-            ", non-OpenAI JSON body: ", safe)
-        return
-    end
-
-    -- Non-JSON, non-SSE Content-Type on a 200 response (e.g. HTML error page).
     ngx.log(ngx.WARN,
-        "[NON-STANDARD] status=200, Content-Type=", ct,
+        "[UPSTREAM-ERROR] status=200, code=", tostring(data.code),
         ", body: ", safe)
 end
 
