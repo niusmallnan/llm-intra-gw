@@ -128,6 +128,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 body_data = {"raw": body_raw}
 
+        # If the test sends a mock error code, return it as an upstream error.
+        mock_code = self.headers.get("X-Mock-Code")
+        if mock_code:
+            self._send_json(200, {"code": mock_code, "message": "upstream error"})
+            return
+
         # If the client requests streaming, return SSE test chunks.
         if body_data and isinstance(body_data, dict) and body_data.get("stream") is True:
             self._send_sse_stream(body_data)

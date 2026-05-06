@@ -116,11 +116,12 @@ local function drain_sse(buf)
     return output, buf
 end
 
--- Called from header_filter_by_lua_block.  For SSE responses we must
--- clear Content-Length because the body_filter may modify the body size
--- (content:"" → content:null or A1010 body clearing).
+-- Called from header_filter_by_lua_block.  Clear Content-Length for
+-- JSON and SSE responses because body_filter may modify the body size
+-- (SSE: content:"" → content:null; JSON/SSE: A1010 body clearing).
 function _M.header_filter()
-    if is_sse() then
+    local ct = ngx.header["Content-Type"] or ""
+    if ct:find("text/event-stream", 1, true) or ct:find("application/json", 1, true) then
         ngx.header["Content-Length"] = nil
     end
 end
@@ -135,9 +136,12 @@ function _M.body_filter(chunk, eof)
     local is_sse_resp = ct:find("text/event-stream", 1, true) ~= nil
     local is_json = ct:find("application/json", 1, true) ~= nil
 
-    -- Only buffer and inspect JSON / SSE responses.
+    -- Only buffer and inspect JSON / SSE responses in openai mode.
     if not is_sse_resp and not is_json then
         return
+    end
+    if not active() then
+        return  -- inhouse mode: pass through unchanged
     end
 
     -- Accumulate raw chunks; suppress output until EOF.

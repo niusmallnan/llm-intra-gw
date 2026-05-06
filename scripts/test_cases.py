@@ -262,6 +262,60 @@ def run_tests(gateway_url):
         else:
             check("inhouse → 200", False, f"got {status}")
 
+    # --- upstream error code detection (openai mode only) ---
+    if upstream_mode != "inhouse":
+        # A1010 code → body cleared so client can retry
+        status, body = http_post(
+            f"{gateway_url}/v1/chat/completions",
+            '{"model":"test","messages":[{"role":"user","content":"hi"}]}',
+            headers={
+                "Content-Type": "application/json",
+                **AUTH_HEADER,
+                "X-Mock-Code": "A1010",
+            },
+        )
+        check("code=A1010 → body cleared",
+              status == 200 and body.strip() == "",
+              f"status={status} len={len(body)} body={body[:100]!r}")
+
+        # Non-A1010 code → body preserved with code field
+        status, body = http_post(
+            f"{gateway_url}/v1/chat/completions",
+            '{"model":"test","messages":[{"role":"user","content":"hi"}]}',
+            headers={
+                "Content-Type": "application/json",
+                **AUTH_HEADER,
+                "X-Mock-Code": "OTHER",
+            },
+        )
+        check("code=OTHER → body preserved",
+              status == 200 and '"code"' in body and "OTHER" in body,
+              f"status={status} body={body[:100]!r}")
+
+        # No code → normal response preserved
+        status, body = http_post(
+            f"{gateway_url}/v1/chat/completions",
+            '{"model":"test","messages":[{"role":"user","content":"hi"}]}',
+            headers={"Content-Type": "application/json", **AUTH_HEADER},
+        )
+        check("no code → body preserved",
+              status == 200 and '"echo"' in body,
+              f"status={status} body={body[:100]!r}")
+    else:
+        # inhouse mode: A1010 code should NOT be cleared
+        status, body = http_post(
+            f"{gateway_url}/v1/chat/completions",
+            '{"model":"test","messages":[{"role":"user","content":"hi"}]}',
+            headers={
+                "Content-Type": "application/json",
+                **AUTH_HEADER,
+                "X-Mock-Code": "A1010",
+            },
+        )
+        check("inhouse code=A1010 → body NOT cleared",
+              status == 200 and '"code"' in body and "A1010" in body,
+              f"status={status} body={body[:100]!r}")
+
 
 def main():
     if len(sys.argv) < 2:
