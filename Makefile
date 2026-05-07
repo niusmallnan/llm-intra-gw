@@ -45,7 +45,11 @@ test-inhouse: build
 
 # ---- Integration tests with rate limiting ----
 test-ratelimit: build
-	@RATE_LIMIT_REQUESTS=3 RATE_LIMIT_BODY_MB=0 bash scripts/test.sh
+	@RATE_LIMIT_REQUESTS=3 bash scripts/test.sh
+
+# ---- Integration tests with body-size rate limiting ----
+test-ratelimit-body: build
+	@RATE_LIMIT_BODY_MB=0.001 bash scripts/test.sh
 
 # ---- Sample request for troubleshooting (gateway must be running, TRACE=1) ----
 send:

@@ -335,16 +335,21 @@ def http_post_full(url, body, headers=None):
 
 
 def run_rate_limit_tests(gateway_url):
-    """Rate-limiting tests — only run when the gateway has RATE_LIMIT_REQUESTS set."""
-    limit = os.environ.get("RATE_LIMIT_REQUESTS", "")
-    if not limit:
-        return
+    """Rate-limiting tests — dispatches to request-count and body-size tests."""
+    req_limit = os.environ.get("RATE_LIMIT_REQUESTS", "")
+    body_limit = os.environ.get("RATE_LIMIT_BODY_MB", "")
 
-    limit_n = int(limit)
+    if req_limit and int(req_limit) > 0:
+        run_request_rate_limit_tests(gateway_url, int(req_limit))
+
+    if body_limit and float(body_limit) > 0:
+        run_body_size_limit_tests(gateway_url, float(body_limit))
+
+
+def run_request_rate_limit_tests(gateway_url, limit_n):
     req_body = '{"model":"test","messages":[{"role":"user","content":"hi"}]}'
     headers = {"Content-Type": "application/json", **AUTH_HEADER}
 
-    # Send requests up to the limit — all should succeed.
     ok_count = 0
     for i in range(limit_n):
         status, _, _ = http_post_full(f"{gateway_url}/v1/chat/completions", req_body, headers=headers)
@@ -355,7 +360,6 @@ def run_rate_limit_tests(gateway_url):
           ok_count == limit_n,
           f"only {ok_count}/{limit_n} got 200")
 
-    # The next request should be rate-limited.
     status, body, rl_headers = http_post_full(
         f"{gateway_url}/v1/chat/completions", req_body, headers=headers,
     )
@@ -363,13 +367,38 @@ def run_rate_limit_tests(gateway_url):
           status == 429 and '"rate_limit_error"' in body,
           f"status={status} body={body[:100]!r}")
 
-    # Verify rate-limit response headers on the 429 response.
     check("rate limit: x-ratelimit-limit-requests header",
           rl_headers.get("x-ratelimit-limit-requests") == str(limit_n),
           f"got {rl_headers.get('x-ratelimit-limit-requests')!r}")
     check("rate limit: x-ratelimit-remaining-requests header",
           rl_headers.get("x-ratelimit-remaining-requests") == "0",
           f"got {rl_headers.get('x-ratelimit-remaining-requests')!r}")
+
+
+def run_body_size_limit_tests(gateway_url, limit_mb):
+    headers = {"Content-Type": "application/json", **AUTH_HEADER}
+    limit_bytes = int(limit_mb * 1024 * 1024)
+
+    # Small body — should pass (well under limit).
+    small_body = json.dumps({"model": "test", "messages": [{"role": "user", "content": "hi"}]})
+    status, _, hdrs = http_post_full(f"{gateway_url}/v1/chat/completions", small_body, headers=headers)
+    check("body limit: small body → 200",
+          status == 200,
+          f"status={status}")
+    check("body limit: x-ratelimit-limit-mb header",
+          hdrs.get("x-ratelimit-limit-mb") == str(limit_mb),
+          f"got {hdrs.get('x-ratelimit-limit-mb')!r}")
+
+    # Large body — should exceed limit.
+    large_content = "x" * (limit_bytes + 100)
+    large_body = json.dumps({"model": "test", "messages": [{"role": "user", "content": large_content}]})
+    status, body, rl_hdrs = http_post_full(f"{gateway_url}/v1/chat/completions", large_body, headers=headers)
+    check("body limit: large body → 429",
+          status == 429 and '"rate_limit_error"' in body,
+          f"status={status} body={body[:100]!r}")
+    check("body limit: x-ratelimit-remaining-mb = 0",
+          float(rl_hdrs.get("x-ratelimit-remaining-mb", "1")) == 0.0,
+          f"got {rl_hdrs.get('x-ratelimit-remaining-mb')!r}")
 
 
 def main():

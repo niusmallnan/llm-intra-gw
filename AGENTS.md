@@ -32,7 +32,8 @@ make up             # docker compose up -d
 make logs           # docker logs -f llm-intra-gw
 make health         # curl :8080/health
 make test           # smoke test against a running gateway (health + 404)
-make test-ratelimit  # same as test but with RATE_LIMIT_REQUESTS=3 (rate limit tests only)
+make test-ratelimit       # same as test but with RATE_LIMIT_REQUESTS=3 (rate limit tests only)
+make test-ratelimit-body  # same as test but with RATE_LIMIT_BODY_MB=0.001 (body size tests only)
 make send           # send a sample request + display TRACE logs (gateway must be running with TRACE=1)
 make clean          # docker compose down + image rm
 ```

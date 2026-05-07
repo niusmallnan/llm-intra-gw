@@ -115,7 +115,7 @@ echo "Gateway is up."
 # run test cases (Python)
 # ---------------------------------------------------------------------------
 
-if [ -n "${RATE_LIMIT_REQUESTS:-}" ]; then
+if [ -n "${RATE_LIMIT_REQUESTS:-}" ] || [ -n "${RATE_LIMIT_BODY_MB:-}" ]; then
     python3 "$SCRIPT_DIR/test_cases.py" "$GATEWAY_URL" --ratelimit-only || EXIT_CODE=$?
 else
     python3 "$SCRIPT_DIR/test_cases.py" "$GATEWAY_URL" || EXIT_CODE=$?
