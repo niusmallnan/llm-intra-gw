@@ -77,6 +77,8 @@ the image or the source code.**
 | `STRIP_REQUEST_PATH` | ❌ | `true` | When `true` (default), proxy requests directly to `UPSTREAM_BASE_URL`. When `false`, append the original request URI (e.g. `/v1/chat/completions`). |
 | `TRACE` | ❌ | *(off)* | Enable request/response tracing to the error log for debugging. Set to `1`, `true`, `on`, or `yes` to log: client request (headers + body), gateway-modified upstream request (injected headers + target URL), and upstream response (status + headers + full body). |
 | `UPSTREAM_MODE` | ❌ | `openai` | Upstream API mode. `openai` (default) proxies requests as-is. `inhouse` **(experimental)** transforms the request body: renames `messages` to `contextMessage` and converts root-level keys from `snake_case` to `camelCase` (e.g. `max_tokens` → `maxTokens`). |
+| `RATE_LIMIT_REQUESTS` | ❌ | `0` *(unlimited)* | Maximum requests per minute per gateway instance. Uses a fixed-window (per-minute) counter. When exceeded, returns `429 Too Many Requests` with an OpenAI-compatible error body before proxying. Set to `0` to disable. |
+| `RATE_LIMIT_BODY_MB` | ❌ | `0` *(unlimited)* | Maximum total request body megabytes per minute. Similar fixed-window counter; tracks the cumulative size of all request bodies. When exceeded, returns `429`. Set to `0` to disable. |
 
 ## Endpoints
 
@@ -113,16 +115,28 @@ the image or the source code.**
    - Any `EXTRA_HEADERS` are applied (except `apikey` and `Authorization`,
      which are reserved).
 
-3. **Proxy** — The request is forwarded to `UPSTREAM_BASE_URL` with the
-   original path and request body preserved.  Since the internal API already
-   speaks the OpenAI protocol, no body transformation is needed.
-   TLS certificate verification is disabled (`proxy_ssl_verify off`) for
-   HTTPS upstreams — the gateway trusts the internal network.
+3. **Rate limiting** — (runs in rewrite phase, after auth, before proxying):
+   - If `RATE_LIMIT_REQUESTS > 0`, each request increments a per-minute counter.
+     When the counter exceeds the limit, the gateway returns `429 Too Many Requests`
+     with an OpenAI-compatible error body (`error.type = "rate_limit_error"`).
+   - If `RATE_LIMIT_BODY_MB > 0`, the total size of all request bodies is tracked
+     with a separate per-minute counter and enforced the same way.
+   - Both limits can be active simultaneously — whichever threshold is crossed first
+     triggers the `429`.
+   - Response headers (`x-ratelimit-limit-requests`, `x-ratelimit-remaining-requests`,
+     `x-ratelimit-reset-requests`, `x-ratelimit-limit-mb`, `x-ratelimit-remaining-mb`)
+     are included for transparency.
 
-4. **Response** — The upstream response is returned to the client as-is
-   (proxied transparently).
+4. **Proxy** — The request is forwarded to `UPSTREAM_BASE_URL` with the
+    original path and request body preserved.  Since the internal API already
+    speaks the OpenAI protocol, no body transformation is needed.
+    TLS certificate verification is disabled (`proxy_ssl_verify off`) for
+    HTTPS upstreams — the gateway trusts the internal network.
 
-5. **Trace (debugging)** — When `TRACE` is enabled, the gateway logs three
+5. **Response** — The upstream response is returned to the client as-is
+    (proxied transparently).
+
+6. **Trace (debugging)** — When `TRACE` is enabled, the gateway logs three
    stages to the nginx error log:
    - Original client request (headers + body)
    - Gateway-modified upstream request (injected headers + target URL)
@@ -143,6 +157,8 @@ EXTRA_HEADERS={"X-Department":"ai-platform"}
 # UPSTREAM_API_KEY=your-shared-api-key  # optional, injects apikey header
 # STREAM=true             # optional, force streaming on
 # TRACE=1                # optional, log request/response details for debugging
+# RATE_LIMIT_REQUESTS=60  # optional, max requests per minute
+# RATE_LIMIT_BODY_MB=10   # optional, max total request body MB per minute
 ```
 
 Then run:
@@ -210,6 +226,12 @@ make test
 
 # Run tests with in-house API mode (UPSTREAM_MODE=inhouse, body transformation)
 make test-inhouse
+
+# Run rate-limit tests (request count limit)
+make test-ratelimit
+
+# Run rate-limit tests (body throughput limit)
+make test-ratelimit-body
 
 # Run just a health check against a running instance
 make health
