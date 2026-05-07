@@ -19,6 +19,7 @@ request → nginx.conf /v1/models location
 - `lua/upstream.lua` — Content-Type validation (only `application/json` accepted), builds upstream URL from `UPSTREAM_BASE_URL` (strips request URI by default; set `STRIP_REQUEST_PATH=false` to append it), injects `apikey` (from `UPSTREAM_API_KEY`, optional) and `Authorization: ACCESSCODE <PERSONAL_ACCESS_CODE>` headers, strips the client's original `Authorization`. When `UPSTREAM_MODE=inhouse` **(experimental)**, transforms the request body: renames `messages` → `contextMessage` and converts root-level keys from `snake_case` to `camelCase` (e.g. `max_tokens` → `maxTokens`). When `STREAM=true`, injects `"stream": true` into the request body.
 - `lua/response_transform.lua` — response body post-processing.  Buffers JSON/SSE response bodies (openai mode only) and inspects them before the client receives data.  Applies SSE `content:""` → `null` transform when `delta.tool_calls` present.  Detects upstream error responses (200 with `"code"` field in body) and logs a warning.  When `code == "A1010"` (rate limit), clears the response body so the client sees an empty 200 and can retry.
 - `lua/models.lua` — returns a curated subset of models (`DeepSeek-V4-Pro`, `GLM-5.1`). Edit the `MODELS` table to add/remove entries.
+- `lua/rate_limit.lua` — API throttling via `RATE_LIMIT_REQUESTS` (max requests/minute) and `RATE_LIMIT_BODY_MB` (max total body MB/minute). Uses `lua_shared_dict gateway` for cross-worker counters with a fixed-window (per-minute) algorithm. When a limit is exceeded, returns `429 Too Many Requests` with an OpenAI-compatible error body. Rate-limit response headers (`x-ratelimit-limit-requests`, `x-ratelimit-remaining-requests`, `x-ratelimit-reset-requests`, `x-ratelimit-limit-mb`, `x-ratelimit-remaining-mb`) are included for transparency. The check runs in the rewrite phase so the upstream is never contacted for throttled requests. Set either env var to `0` or leave empty to disable the corresponding limit.
 - `lua/trace.lua` — request/response tracing for debugging. When `TRACE` env var is set (`1`/`true`/`on`/`yes`), logs to error log: client request (headers + body), modified upstream request (injected headers + target URL + potentially transformed body), and upstream response (status + headers + full body).  Receives raw response chunks (before `response_transform` suppresses them).
 - `conf/nginx.conf` — declares all env vars via `env` directive (required for `os.getenv()` in Lua) and defines `lua_package_path`.
 
@@ -31,7 +32,7 @@ make up             # docker compose up -d
 make logs           # docker logs -f llm-intra-gw
 make health         # curl :8080/health
 make test           # smoke test against a running gateway (health + 404)
-make test-inhouse   # same as test but with UPSTREAM_MODE=inhouse (experimental, body transformation)
+make test-ratelimit  # same as test but with RATE_LIMIT_REQUESTS=3 (rate limit tests only)
 make send           # send a sample request + display TRACE logs (gateway must be running with TRACE=1)
 make clean          # docker compose down + image rm
 ```

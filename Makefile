@@ -43,6 +43,10 @@ test: build
 test-inhouse: build
 	@UPSTREAM_MODE=inhouse bash scripts/test.sh
 
+# ---- Integration tests with rate limiting ----
+test-ratelimit: build
+	@RATE_LIMIT_REQUESTS=3 RATE_LIMIT_BODY_MB=0 bash scripts/test.sh
+
 # ---- Sample request for troubleshooting (gateway must be running, TRACE=1) ----
 send:
 	@GATEWAY_URL=$${GATEWAY_URL:-http://localhost:8080} \

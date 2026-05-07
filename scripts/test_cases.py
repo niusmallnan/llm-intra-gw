@@ -317,15 +317,74 @@ def run_tests(gateway_url):
               f"status={status} body={body[:100]!r}")
 
 
+def http_post_full(url, body, headers=None):
+    """POST and return (status, body, response_headers_dict)."""
+    if headers is None:
+        headers = {}
+    data = body.encode() if isinstance(body, str) else body
+    try:
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            hdrs = {k.lower(): v for k, v in resp.getheaders()}
+            return resp.status, resp.read().decode("utf-8", errors="replace"), hdrs
+    except urllib.error.HTTPError as e:
+        hdrs = {k.lower(): v for k, v in e.headers.items()}
+        return e.code, e.read().decode("utf-8", errors="replace"), hdrs
+    except Exception:
+        return 0, "", {}
+
+
+def run_rate_limit_tests(gateway_url):
+    """Rate-limiting tests — only run when the gateway has RATE_LIMIT_REQUESTS set."""
+    limit = os.environ.get("RATE_LIMIT_REQUESTS", "")
+    if not limit:
+        return
+
+    limit_n = int(limit)
+    req_body = '{"model":"test","messages":[{"role":"user","content":"hi"}]}'
+    headers = {"Content-Type": "application/json", **AUTH_HEADER}
+
+    # Send requests up to the limit — all should succeed.
+    ok_count = 0
+    for i in range(limit_n):
+        status, _, _ = http_post_full(f"{gateway_url}/v1/chat/completions", req_body, headers=headers)
+        if status == 200:
+            ok_count += 1
+
+    check(f"rate limit: {limit_n} requests → all 200",
+          ok_count == limit_n,
+          f"only {ok_count}/{limit_n} got 200")
+
+    # The next request should be rate-limited.
+    status, body, rl_headers = http_post_full(
+        f"{gateway_url}/v1/chat/completions", req_body, headers=headers,
+    )
+    check("rate limit: exceeded → 429",
+          status == 429 and '"rate_limit_error"' in body,
+          f"status={status} body={body[:100]!r}")
+
+    # Verify rate-limit response headers on the 429 response.
+    check("rate limit: x-ratelimit-limit-requests header",
+          rl_headers.get("x-ratelimit-limit-requests") == str(limit_n),
+          f"got {rl_headers.get('x-ratelimit-limit-requests')!r}")
+    check("rate limit: x-ratelimit-remaining-requests header",
+          rl_headers.get("x-ratelimit-remaining-requests") == "0",
+          f"got {rl_headers.get('x-ratelimit-remaining-requests')!r}")
+
+
 def main():
     if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <gateway-url>", file=sys.stderr)
+        print(f"Usage: {sys.argv[0]} <gateway-url> [--ratelimit-only]", file=sys.stderr)
         sys.exit(2)
 
     gateway_url = sys.argv[1].rstrip("/")
 
     print("\n=== Running tests ===")
-    run_tests(gateway_url)
+    if "--ratelimit-only" in sys.argv:
+        run_rate_limit_tests(gateway_url)
+    else:
+        run_tests(gateway_url)
+        run_rate_limit_tests(gateway_url)
     print()
     print(f"Tests: {pass_count + fail_count} | Passed: {pass_count} | Failed: {fail_count}")
 

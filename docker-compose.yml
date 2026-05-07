@@ -22,6 +22,8 @@ services:
       FAKE_OPENAI_KEY: ${FAKE_OPENAI_KEY:-}
       UPSTREAM_MODE: ${UPSTREAM_MODE:-}
       TRACE: ${TRACE:-}
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-}
+      RATE_LIMIT_BODY_MB: ${RATE_LIMIT_BODY_MB:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
