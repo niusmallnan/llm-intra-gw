@@ -62,6 +62,9 @@ local function check_requests()
     ngx.header["x-ratelimit-reset-requests"]      = tostring(60 - (ngx.time() % 60) .. "s")
 
     if used > max_requests then
+        ngx.log(ngx.WARN, "[RATE-LIMIT] request count exceeded: ",
+            used, "/", max_requests, " requests/min",
+            " (", tostring(remaining), " remaining)")
         return false, "request rate limit exceeded: " ..
             max_requests .. " requests per minute"
     end
@@ -92,6 +95,9 @@ local function check_body_size(body_len)
     ngx.header["x-ratelimit-remaining-mb"] = tostring(math.floor(remaining / 1024 / 1024 * 100 + 0.5) / 100)
 
     if used > max_bytes then
+        ngx.log(ngx.WARN, "[RATE-LIMIT] body throughput exceeded: ",
+            used, " bytes / ", max_bytes, " bytes limit (",
+            remaining, " bytes remaining)")
         return false, "body throughput limit exceeded: " ..
             max_body_mb .. " MB per minute"
     end
